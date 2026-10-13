@@ -57,7 +57,7 @@ public enum Confidence: String, Codable, Sendable, CaseIterable {
 
 /// 紧急度分级。
 public enum Urgency: String, Codable, Sendable, CaseIterable {
-    /// 🔴 已超过预测中位日 —— 随时可能没电。
+    /// 🔴 已超过预测的中位耗尽**时刻** —— 随时可能没电。
     case overdue
     /// 🟠 已进入风险窗口（P10）—— 该换了。
     case risk
@@ -68,7 +68,7 @@ public enum Urgency: String, Codable, Sendable, CaseIterable {
 
     public var displayName: String {
         switch self {
-        case .overdue: return "已逾期"
+        case .overdue: return "耗尽中"
         case .risk: return "风险窗口"
         case .stockUp: return "该备货"
         case .normal: return "正常"
@@ -85,23 +85,30 @@ public enum Urgency: String, Codable, Sendable, CaseIterable {
     }
 }
 
-/// 给 UI / 小组件用的最终结论。
+/// 给 UI / 小组件用的最终结论。**所有时间量的单位都是小时。**
 public struct Prediction: Sendable, Equatable {
-    /// 预测中位寿命（天）。对数正态的中位数比均值稳健。
-    public var medianDays: Double
-    /// P10 下界寿命（天）—— 风险窗口起点。
-    public var p10Days: Double
-    /// 预计耗尽日。
-    public var medianDate: Date
-    /// 风险窗口起点。
-    public var riskDate: Date
-    /// 距预计耗尽日还有几天（负数 = 逾期）。
-    public var remainingDays: Int
-    /// 距风险窗口还有几天（负数 = 已进入）。
-    public var riskRemainingDays: Int
-    /// 当前这颗电池已用天数。
-    public var ageDays: Int
-    /// 已用天数 / 预测中位寿命。
+    /// 预测中位寿命（小时）。对数正态的中位数比均值稳健。
+    public var medianHours: Double
+    /// P10 下界寿命（小时）—— 风险窗口起点。
+    public var p10Hours: Double
+    /// 预计耗尽**时刻**（中位）。
+    ///
+    /// 注意是「时刻」而不是「日期」：对一块标称撑 4 天的纽扣电池来说，
+    /// 「哪一天耗尽」远不如「几点耗尽」有用 —— 后者才能回答
+    /// 「我早上 8 点出门，它撑得到我晚上回来吗」。
+    public var p50ExhaustAt: Date
+    /// 风险窗口起点**时刻**（P10，早于 `p50ExhaustAt`）。
+    public var p10ExhaustAt: Date
+    /// 距中位耗尽时刻还有几小时（**含小数**，负数 = 逾期）。
+    ///
+    /// 用 `Double` 而不是 `Int`：取整是**显示层**的事，不该污染模型输出。
+    /// UI 需要整数时调 `LifetimeModel.wholeHours`（朝零截断，双向保守）。
+    public var remainingHours: Double
+    /// 距风险窗口还有几小时（含小数，负数 = 已进入）。
+    public var p10RemainingHours: Double
+    /// 当前这颗电池已用小时数。
+    public var ageHours: Double
+    /// 已用时长 / 预测中位寿命。
     public var ratio: Double
     /// 预测分布宽度 = sqrt(σ_post² + σ_within²)，已封顶。
     public var sigmaPrediction: Double
@@ -110,26 +117,26 @@ public struct Prediction: Sendable, Equatable {
     public var posterior: Posterior
 
     public init(
-        medianDays: Double,
-        p10Days: Double,
-        medianDate: Date,
-        riskDate: Date,
-        remainingDays: Int,
-        riskRemainingDays: Int,
-        ageDays: Int,
+        medianHours: Double,
+        p10Hours: Double,
+        p50ExhaustAt: Date,
+        p10ExhaustAt: Date,
+        remainingHours: Double,
+        p10RemainingHours: Double,
+        ageHours: Double,
         ratio: Double,
         sigmaPrediction: Double,
         urgency: Urgency,
         confidence: Confidence,
         posterior: Posterior
     ) {
-        self.medianDays = medianDays
-        self.p10Days = p10Days
-        self.medianDate = medianDate
-        self.riskDate = riskDate
-        self.remainingDays = remainingDays
-        self.riskRemainingDays = riskRemainingDays
-        self.ageDays = ageDays
+        self.medianHours = medianHours
+        self.p10Hours = p10Hours
+        self.p50ExhaustAt = p50ExhaustAt
+        self.p10ExhaustAt = p10ExhaustAt
+        self.remainingHours = remainingHours
+        self.p10RemainingHours = p10RemainingHours
+        self.ageHours = ageHours
         self.ratio = ratio
         self.sigmaPrediction = sigmaPrediction
         self.urgency = urgency
@@ -138,25 +145,138 @@ public struct Prediction: Sendable, Equatable {
     }
 }
 
+/// 主数字的显示样式（App 设置页可选）。原始值持久化到 UserDefaults。
+public enum ExhaustDisplayStyle: String, Codable, Sendable, CaseIterable, Identifiable {
+    /// 「10月18日 周日 08:00」—— 给时刻，方便对着自己的日程看。
+    case moment
+    /// 「还剩 84 小时」/「约 137 天」/「约 4 个月」—— 给剩余量，单位自适应。
+    case remaining
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .moment: return "耗尽时刻"
+        case .remaining: return "剩余时长"
+        }
+    }
+}
+
 public extension Prediction {
-    /// 小组件 / 列表上显示的一行短文本。
-    var shortDescription: String {
-        switch urgency {
-        case .overdue:
-            return "逾期 \(abs(remainingDays)) 天"
-        case .risk:
-            // ⚠️ 用 remainingDays，不是 riskRemainingDays！
-            // 后者是「进入风险窗口已经过了几天」，拿它上屏会显示成一个荒唐的小数字
-            // （实测某设备年龄 200 天 / P10 189 天 → riskRemainingDays = -11，
-            //   但实际距中位日还有 99 天）。这里要的是「大概还剩多少」。
-            return "≤ \(max(remainingDays, 0)) 天"
-        case .stockUp, .normal:
-            return "\(remainingDays) 天"
+    /// **本 App 的主打数字**：还要多久耗尽 —— 以及列表/小组件上那一行主文案。
+    ///
+    /// ⚠️ 两种样式报的都是 **P10（最坏情况）**，不是中位数。这是刻意的：
+    /// 用户拿这个数字回答的问题是「**撑不撑得过今天 / 这趟出门**」。
+    /// 中位数只意味着「有一半概率比这更早耗尽」—— 拿它做决定就是抛硬币。
+    /// 中位数放在 `medianText()` 里当小字，让用户看得见两者的差距。
+    ///
+    /// 取整一律朝**保守**方向：时刻向下取整到整点、小时数朝零截断到整数。
+    /// 宁可说早一点，不可以说晚 —— 这个 App 的失败代价是「没电了才发现」。
+    ///
+    /// 📌 历史坑（已修，别再踩）：这里曾经用 `remainingHours`（距**中位**耗尽时刻）
+    /// 当主数字，还在注释里留了一段「必须用 remainingHours、别用 p10」的告诫。
+    /// 那本质上是在拿中位数当保证：某设备年龄 200 天 / P10 189 天，
+    /// 中位说「还有 99 天」，实际早就进了风险窗口。现在信口头号反过来了。
+    func remainingText(
+        style: ExhaustDisplayStyle,
+        timeZone: TimeZone = .current,
+        locale: Locale = .current
+    ) -> String {
+        switch style {
+        case .remaining:
+            return Self.adaptiveHours(p10RemainingHours)
+
+        case .moment:
+            let moment = LifetimeModel.floorToHour(p10ExhaustAt, in: timeZone)
+            let text = Self.momentFormatter(timeZone: timeZone, locale: locale).string(from: moment)
+            return p10RemainingHours < 0 ? "耗尽中 · \(text)" : text
         }
     }
 
-    /// 剩余比例（0...1），用于进度条。
+    /// 副文案：**中位**预测。主文案报最坏情况时，这个让人知道差多远。
+    func medianText(
+        style: ExhaustDisplayStyle,
+        timeZone: TimeZone = .current,
+        locale: Locale = .current
+    ) -> String {
+        switch style {
+        case .remaining:
+            return "中位 · " + Self.adaptiveHours(remainingHours)
+
+        case .moment:
+            let moment = LifetimeModel.floorToHour(p50ExhaustAt, in: timeZone)
+            let text = Self.momentFormatter(timeZone: timeZone, locale: locale).string(from: moment)
+            // 不判「中位是否已过」：P50 ≥ P10 恒成立，中位过了主文案一定已经报「耗尽中」了，
+            // 再标一次是多余。
+            return "中位 · \(text)"
+        }
+    }
+
+    /// 单位自适应的剩余时长文案 —— **纯显示层**，内部一律精确小时。
+    ///
+    /// 不让 5 号电池显示「还剩 1443 小时」这种假精度：那 1443 小时背后 P10~P90
+    /// 可能横跨几百小时，把一个不确定量写成 4 位有效数字就是在撒谎。
+    /// 阈值取 48 小时 / 1440 小时（2 天 / 60 天）—— 更细的粒度没有决策价值。
+    ///
+    /// 负数（已耗尽）也走同一套量级分支，只是措辞不同且**不加「约」**：
+    /// 耗尽 3 个月说「耗尽中 3 个月」，不说「耗尽中 2160 小时」。
+    /// 与 Python 的 `format_remaining_short` 必须逐字符一致（黄金数值会断言）。
+    static func adaptiveHours(_ hours: Double) -> String {
+        let h = LifetimeModel.wholeHours(hours)
+        let magnitude = abs(h)
+
+        let count: Int
+        let unit: String
+        if magnitude >= 1440 {
+            count = magnitude / 720        // 一个月按 30 天算
+            unit = "个月"
+        } else if magnitude >= 48 {
+            count = magnitude / 24
+            unit = "天"
+        } else {
+            count = magnitude
+            unit = "小时"
+        }
+
+        if h < 0 {
+            return "耗尽中 \(count) \(unit)"   // 耗尽已是既成事实，不加「约」
+        }
+        if unit == "小时" {
+            return "还剩 \(count) 小时"
+        }
+        return "约 \(count) \(unit)"
+    }
+
+    /// 风险窗口起点（P10）的文本 —— 「最早可能耗尽」。
+    ///
+    /// 这是本模型真正的卖点：中位数只代表 50% 的概率，只盯着它换电池必然翻车。
+    /// 「撑不撑得过今天」应该问的是这个时刻，而不是中位数。
+    func riskWindowText(
+        timeZone: TimeZone = .current,
+        locale: Locale = .current
+    ) -> String {
+        let moment = LifetimeModel.floorToHour(p10ExhaustAt, in: timeZone)
+        return Self.momentFormatter(timeZone: timeZone, locale: locale).string(from: moment)
+    }
+
+    /// 剩余比例（0...1）。**只用于画进度条，不参与任何判定。**
     var consumedFraction: Double {
         min(max(ratio, 0), 1)
+    }
+
+    /// 「10月18日 周日 08:00」。
+    ///
+    /// 用显式 `dateFormat` 而不是 `setLocalizedDateFormatFromTemplate`：
+    /// 本 App 只面向中文用户，显式格式可预测，不受设备区域设置漂移影响。
+    /// 时刻在调用前已 `floorToHour`，所以 `mm` 必然是 "00"。
+    ///
+    /// 刻意不做静态缓存：`static var` 在 Swift 6 严格并发下会报数据竞争，
+    /// 而本机无法编译验证。`DateFormatter` 单次创建的开销在列表规模下可忽略。
+    private static func momentFormatter(timeZone: TimeZone, locale: Locale) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.timeZone = timeZone
+        formatter.locale = locale
+        formatter.dateFormat = "M月d日 EEE HH:mm"
+        return formatter
     }
 }

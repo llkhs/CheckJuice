@@ -1,618 +1,648 @@
 {
   "cases": {
     "agingTrend": {
-      "ageDays": 200,
+      "ageHours": 4800.0,
       "confidence": "high",
       "events": [
         {
-          "at": "2021-08-31",
+          "at": "2021-08-31T12:00:00",
           "type": "initial"
         },
         {
-          "at": "2022-10-05",
+          "at": "2022-10-05T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2023-10-10",
+          "at": "2023-10-10T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2024-09-04",
+          "at": "2024-09-04T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2025-07-01",
+          "at": "2025-07-01T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2026-03-28",
+          "at": "2026-03-28T12:00:00",
           "type": "exhausted"
         }
       ],
-      "installedAt": "2026-03-28",
+      "headlineRemaining": "约 35 天",
+      "installedAt": "2026-03-28T12:00:00",
       "kind": "cr2032",
-      "m": 5.737193272636181,
-      "medianDate": "2027-02-01",
-      "medianDays": 310.19256208061284,
+      "m": 8.915247102984129,
+      "medianHours": 7444.621489934725,
+      "medianLineRemaining": "中位 · 约 3 个月",
       "nEff": 4.035948188036676,
       "nObserved": 5,
       "name": "老化趋势",
-      "nominalLifeDays": null,
-      "notifyLeadDays": 14,
-      "p10Days": 235.97023738488932,
-      "ratio": 0.6447607855536652,
+      "nominalLifeHours": null,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2026-11-19T11:17:08.510054",
+      "p10Hours": 5663.2856972373565,
+      "p10RemainingHours": 863.2856972372223,
+      "p50ExhaustAt": "2027-02-01T16:37:17.363765",
+      "ratio": 0.6447607855536638,
       "referencePrior": null,
-      "remainingDays": 110,
-      "riskDate": "2026-11-19",
-      "riskRemainingDays": 36,
+      "remainingHours": 2644.621489934722,
       "sigmaPost": 0.15,
-      "sigmaPred": 0.21340349908052939,
-      "sigmaWithin": 0.15179279765461043,
+      "sigmaPred": 0.2134034990805294,
+      "sigmaWithin": 0.15179279765461048,
       "urgency": "normal"
     },
     "coldStart": {
-      "ageDays": 0,
+      "ageHours": 0.0,
       "confidence": "low",
       "events": [
         {
-          "at": "2026-10-14",
+          "at": "2026-10-14T12:00:00",
           "type": "initial"
         }
       ],
-      "installedAt": "2026-10-14",
+      "headlineRemaining": "约 4 个月",
+      "installedAt": "2026-10-14T12:00:00",
       "kind": "cr2032",
-      "m": 5.8998973535824915,
-      "medianDate": "2027-10-14",
-      "medianDays": 365.0,
+      "m": 9.077951183930438,
+      "medianHours": 8760.000000000005,
+      "medianLineRemaining": "中位 · 约 12 个月",
       "nEff": 0.0,
       "nObserved": 0,
       "name": "冷启动",
-      "nominalLifeDays": null,
-      "notifyLeadDays": 14,
-      "p10Days": 148.83097375623348,
+      "nominalLifeHours": null,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2027-03-12T07:56:36.132539",
+      "p10Hours": 3571.9433701496023,
+      "p10RemainingHours": 3571.9433701497223,
+      "p50ExhaustAt": "2027-10-14T12:00:00",
       "ratio": 0.0,
       "referencePrior": null,
-      "remainingDays": 365,
-      "riskDate": "2027-03-12",
-      "riskRemainingDays": 149,
+      "remainingHours": 8760.0,
       "sigmaPost": 0.5,
       "sigmaPred": 0.7,
       "sigmaWithin": 0.5,
       "urgency": "normal"
     },
     "customLife": {
-      "ageDays": 100,
+      "ageHours": 2400.0,
       "confidence": "medium",
       "events": [
         {
-          "at": "2024-11-23",
+          "at": "2024-11-23T12:00:00",
           "type": "initial"
         },
         {
-          "at": "2025-09-19",
+          "at": "2025-09-19T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2026-07-06",
+          "at": "2026-07-06T12:00:00",
           "type": "exhausted"
         }
       ],
-      "installedAt": "2026-07-06",
+      "headlineRemaining": "约 2 个月",
+      "installedAt": "2026-07-06T12:00:00",
       "kind": "other",
-      "m": 5.548982547827049,
-      "medianDate": "2027-03-20",
-      "medianDays": 256.9759620977151,
+      "m": 8.727036378174992,
+      "medianHours": 6167.423090345144,
+      "medianLineRemaining": "中位 · 约 5 个月",
       "nEff": 1.9395973154362414,
       "nObserved": 2,
       "name": "手填寿命",
-      "nominalLifeDays": 180.0,
-      "notifyLeadDays": 14,
-      "p10Days": 163.74856792172272,
-      "ratio": 0.38914145581435744,
+      "nominalLifeHours": 4320.0,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2026-12-17T05:57:56.268437",
+      "p10Hours": 3929.965630121334,
+      "p10RemainingHours": 1529.9656301213888,
+      "p50ExhaustAt": "2027-03-20T11:25:23.125243",
+      "ratio": 0.3891414558143586,
       "referencePrior": null,
-      "remainingDays": 157,
-      "riskDate": "2026-12-17",
-      "riskRemainingDays": 64,
+      "remainingHours": 3767.423090345278,
       "sigmaPost": 0.18344965851346462,
       "sigmaPred": 0.351644390270493,
       "sigmaWithin": 0.3,
       "urgency": "normal"
     },
     "faultyOutlier": {
-      "ageDays": 120,
+      "ageHours": 2880.0,
       "confidence": "high",
       "events": [
         {
-          "at": "2022-03-29",
+          "at": "2022-03-29T12:00:00",
           "type": "initial"
         },
         {
-          "at": "2023-01-23",
+          "at": "2023-01-23T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2023-11-09",
+          "at": "2023-11-09T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2024-09-14",
+          "at": "2024-09-14T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2024-11-13",
+          "at": "2024-11-13T12:00:00",
           "type": "faulty"
         },
         {
-          "at": "2025-09-04",
+          "at": "2025-09-04T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2026-06-16",
+          "at": "2026-06-16T12:00:00",
           "type": "exhausted"
         }
       ],
-      "installedAt": "2026-06-16",
+      "headlineRemaining": "约 3 个月",
+      "installedAt": "2026-06-16T12:00:00",
       "kind": "cr2032",
-      "m": 5.687382845509828,
-      "medianDate": "2027-04-07",
-      "medianDays": 295.12023380047447,
+      "m": 8.865436675857774,
+      "medianHours": 7082.885611211391,
+      "medianLineRemaining": "中位 · 约 5 个月",
       "nEff": 4.035948188036676,
       "nObserved": 5,
       "name": "坏电池",
-      "nominalLifeDays": null,
-      "notifyLeadDays": 14,
-      "p10Days": 224.87050535767375,
-      "ratio": 0.4066139364782757,
+      "nominalLifeHours": null,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2027-01-27T08:53:31.662903",
+      "p10Hours": 5396.892128584178,
+      "p10RemainingHours": 2516.8921285841666,
+      "p50ExhaustAt": "2027-04-07T14:53:08.200361",
+      "ratio": 0.4066139364782755,
       "referencePrior": null,
-      "remainingDays": 175,
-      "riskDate": "2027-01-27",
-      "riskRemainingDays": 105,
+      "remainingHours": 4202.885611211389,
       "sigmaPost": 0.15,
       "sigmaPred": 0.21213203435596426,
       "sigmaWithin": 0.15,
       "urgency": "normal"
     },
-    "leadDays30": {
-      "ageDays": 200,
+    "lead30d": {
+      "ageHours": 4800.0,
       "confidence": "medium",
       "events": [
         {
-          "at": "2023-10-10",
+          "at": "2023-10-10T12:00:00",
           "type": "initial"
         },
         {
-          "at": "2024-08-05",
+          "at": "2024-08-05T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2025-05-22",
+          "at": "2025-05-22T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2026-03-28",
+          "at": "2026-03-28T12:00:00",
           "type": "exhausted"
         }
       ],
-      "installedAt": "2026-03-28",
+      "headlineRemaining": "约 36 天",
+      "installedAt": "2026-03-28T12:00:00",
       "kind": "cr2450",
-      "m": 5.735751546824387,
-      "medianDate": "2027-02-01",
-      "medianDays": 309.7456716813545,
+      "m": 8.913805377172334,
+      "medianHours": 7433.89612035252,
+      "medianLineRemaining": "中位 · 约 3 个月",
       "nEff": 2.7721518987341778,
       "nObserved": 3,
       "name": "提前30天提醒",
-      "nominalLifeDays": null,
-      "notifyLeadDays": 30,
-      "p10Days": 236.01453829976705,
-      "ratio": 0.6456910242340579,
+      "nominalLifeHours": null,
+      "notifyLeadHours": 720.0,
+      "p10ExhaustAt": "2026-11-19T12:20:56.109100",
+      "p10Hours": 5664.348919194423,
+      "p10RemainingHours": 864.3489191944444,
+      "p50ExhaustAt": "2027-02-01T05:53:46.033269",
+      "ratio": 0.6456910242340569,
       "referencePrior": null,
-      "remainingDays": 110,
-      "riskDate": "2026-11-19",
-      "riskRemainingDays": 36,
+      "remainingHours": 2633.8961203525,
       "sigmaPost": 0.15,
       "sigmaPred": 0.21213203435596426,
       "sigmaWithin": 0.15,
       "urgency": "normal"
     },
     "longIntervals": {
-      "ageDays": 400,
+      "ageHours": 9600.0,
       "confidence": "medium",
       "events": [
         {
-          "at": "2015-11-01",
+          "at": "2015-11-01T12:00:00",
           "type": "initial"
         },
         {
-          "at": "2019-02-13",
+          "at": "2019-02-13T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2022-02-17",
+          "at": "2022-02-17T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2025-09-09",
+          "at": "2025-09-09T12:00:00",
           "type": "exhausted"
         }
       ],
-      "installedAt": "2025-09-09",
+      "headlineRemaining": "约 17 个月",
+      "installedAt": "2025-09-09T12:00:00",
       "kind": "builtin_li",
-      "m": 7.095660098931695,
-      "medianDate": "2028-12-29",
-      "medianDays": 1206.7186543410646,
+      "m": 10.273713929279639,
+      "medianHours": 28961.24770418549,
+      "medianLineRemaining": "中位 · 约 26 个月",
       "nEff": 2.7721518987341778,
       "nObserved": 3,
       "name": "超长间隔",
-      "nominalLifeDays": null,
-      "notifyLeadDays": 14,
-      "p10Days": 919.4741754293466,
-      "ratio": 0.33147743143029657,
+      "nominalLifeHours": null,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2028-03-16T23:22:48.757095",
+      "p10Hours": 22067.38021030429,
+      "p10RemainingHours": 12467.380210304167,
+      "p50ExhaustAt": "2028-12-29T05:14:51.735068",
+      "ratio": 0.3314774314302973,
       "referencePrior": null,
-      "remainingDays": 807,
-      "riskDate": "2028-03-16",
-      "riskRemainingDays": 519,
+      "remainingHours": 19361.247704185553,
       "sigmaPost": 0.15,
       "sigmaPred": 0.21213203435596426,
       "sigmaWithin": 0.15,
       "urgency": "normal"
     },
     "oneSample": {
-      "ageDays": 60,
+      "ageHours": 1440.0,
       "confidence": "low",
       "events": [
         {
-          "at": "2025-10-19",
+          "at": "2025-10-19T12:00:00",
           "type": "initial"
         },
         {
-          "at": "2026-08-15",
+          "at": "2026-08-15T12:00:00",
           "type": "exhausted"
         }
       ],
-      "installedAt": "2026-08-15",
+      "headlineRemaining": "约 4 个月",
+      "installedAt": "2026-08-15T12:00:00",
       "kind": "cr2032",
-      "m": 5.755695236724925,
-      "medianDate": "2027-06-27",
-      "medianDays": 315.9851556602851,
+      "m": 8.93374906707287,
+      "medianHours": 7583.64373584684,
+      "medianLineRemaining": "中位 · 约 8 个月",
       "nEff": 1.0,
       "nObserved": 1,
       "name": "单样本",
-      "nominalLifeDays": null,
-      "notifyLeadDays": 14,
-      "p10Days": 190.42086658349504,
-      "ratio": 0.1898823375883703,
+      "nominalLifeHours": null,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2027-02-21T22:06:02.872814",
+      "p10Hours": 4570.100798003879,
+      "p10RemainingHours": 3130.100798003889,
+      "p50ExhaustAt": "2027-06-27T11:38:37.449049",
+      "ratio": 0.18988233758837036,
       "referencePrior": null,
-      "remainingDays": 256,
-      "riskDate": "2027-02-21",
-      "riskRemainingDays": 130,
+      "remainingHours": 6143.643735846945,
       "sigmaPost": 0.2572478777137633,
       "sigmaPred": 0.3951916884098593,
       "sigmaWithin": 0.3,
       "urgency": "normal"
     },
     "overdue": {
-      "ageDays": 330,
+      "ageHours": 7920.0,
       "confidence": "medium",
       "events": [
         {
-          "at": "2024-04-07",
+          "at": "2024-04-07T12:00:00",
           "type": "initial"
         },
         {
-          "at": "2025-02-01",
+          "at": "2025-02-01T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2025-11-18",
+          "at": "2025-11-18T12:00:00",
           "type": "exhausted"
         }
       ],
-      "installedAt": "2025-11-18",
+      "headlineRemaining": "耗尽中 4 个月",
+      "installedAt": "2025-11-18T12:00:00",
       "kind": "cr2032",
-      "m": 5.717663919673538,
-      "medianDate": "2026-09-18",
-      "medianDays": 304.1934718919141,
+      "m": 8.895717750021483,
+      "medianHours": 7300.643325405929,
+      "medianLineRemaining": "中位 · 耗尽中 25 天",
       "nEff": 1.9395973154362414,
       "nObserved": 2,
-      "name": "已逾期",
-      "nominalLifeDays": null,
-      "notifyLeadDays": 14,
-      "p10Days": 191.92980200637732,
-      "ratio": 1.0848359037673743,
+      "name": "耗尽中",
+      "nominalLifeHours": null,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2026-05-29T10:18:54.893351",
+      "p10Hours": 4606.315248153051,
+      "p10RemainingHours": -3313.6847518469444,
+      "p50ExhaustAt": "2026-09-18T16:38:35.971461",
+      "ratio": 1.0848359037673756,
       "referencePrior": null,
-      "remainingDays": -26,
-      "riskDate": "2026-05-29",
-      "riskRemainingDays": -138,
+      "remainingHours": -619.3566745941666,
       "sigmaPost": 0.19783146096715923,
       "sigmaPred": 0.35935676833531416,
       "sigmaWithin": 0.3,
       "urgency": "overdue"
     },
     "preventive": {
-      "ageDays": 150,
+      "ageHours": 3600.0,
       "confidence": "medium",
       "events": [
         {
-          "at": "2023-08-01",
+          "at": "2023-08-01T12:00:00",
           "type": "initial"
         },
         {
-          "at": "2024-05-27",
+          "at": "2024-05-27T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2024-09-24",
+          "at": "2024-09-24T12:00:00",
           "type": "preventive"
         },
         {
-          "at": "2025-07-11",
+          "at": "2025-07-11T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2026-05-17",
+          "at": "2026-05-17T12:00:00",
           "type": "exhausted"
         }
       ],
-      "installedAt": "2026-05-17",
+      "headlineRemaining": "约 2 个月",
+      "installedAt": "2026-05-17T12:00:00",
       "kind": "cr2032",
-      "m": 5.713955622478798,
-      "medianDate": "2027-03-16",
-      "medianDays": 303.06752106387694,
+      "m": 8.892009452826745,
+      "medianHours": 7273.6205055330565,
+      "medianLineRemaining": "中位 · 约 5 个月",
       "nEff": 2.7721518987341778,
       "nObserved": 3,
       "name": "预防性更换",
-      "nominalLifeDays": null,
-      "notifyLeadDays": 14,
-      "p10Days": 230.9260389960489,
-      "ratio": 0.494939211808133,
+      "nominalLifeHours": null,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2027-01-03T10:13:29.769259",
+      "p10Hours": 5542.224935905187,
+      "p10RemainingHours": 1942.2249359052778,
+      "p50ExhaustAt": "2027-03-16T13:37:13.819919",
+      "ratio": 0.49493921180813233,
       "referencePrior": null,
-      "remainingDays": 153,
-      "riskDate": "2027-01-03",
-      "riskRemainingDays": 81,
+      "remainingHours": 3673.6205055330556,
       "sigmaPost": 0.15,
       "sigmaPred": 0.21213203435596426,
       "sigmaWithin": 0.15,
       "urgency": "normal"
     },
     "refPrior": {
-      "ageDays": 100,
+      "ageHours": 2400.0,
       "confidence": "medium",
       "events": [
         {
-          "at": "2024-11-23",
+          "at": "2024-11-23T12:00:00",
           "type": "initial"
         },
         {
-          "at": "2025-09-19",
+          "at": "2025-09-19T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2026-07-06",
+          "at": "2026-07-06T12:00:00",
           "type": "exhausted"
         }
       ],
-      "installedAt": "2026-07-06",
+      "headlineRemaining": "约 3 个月",
+      "installedAt": "2026-07-06T12:00:00",
       "kind": "cr2032",
-      "m": 5.690725775261689,
-      "medianDate": "2027-04-28",
-      "medianDays": 296.10845086023573,
+      "m": 8.87039126611133,
+      "medianHours": 7118.065486194442,
+      "medianLineRemaining": "中位 · 约 6 个月",
       "nEff": 1.9395973154362414,
       "nObserved": 2,
       "name": "引用同型号",
-      "nominalLifeDays": null,
-      "notifyLeadDays": 14,
-      "p10Days": 191.1504165517454,
-      "ratio": 0.33771410342895064,
+      "nominalLifeHours": null,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2027-01-13T23:00:34.661939",
+      "p10Hours": 4595.00962831651,
+      "p10RemainingHours": 2195.009628316389,
+      "p50ExhaustAt": "2027-04-29T02:03:55.750300",
+      "ratio": 0.337170261309737,
       "referencePrior": {
-        "logMedian": 5.7,
+        "logMedian": 8.881836305004146,
         "tau": 0.25
       },
-      "remainingDays": 196,
-      "riskDate": "2027-01-13",
-      "riskRemainingDays": 91,
+      "remainingHours": 4718.065486194445,
       "sigmaPost": 0.16318820916881377,
       "sigmaPred": 0.34151192016051873,
       "sigmaWithin": 0.3,
       "urgency": "normal"
     },
     "riskWindow": {
-      "ageDays": 200,
+      "ageHours": 4800.0,
       "confidence": "medium",
       "events": [
         {
-          "at": "2024-08-15",
+          "at": "2024-08-15T12:00:00",
           "type": "initial"
         },
         {
-          "at": "2025-06-11",
+          "at": "2025-06-11T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2026-03-28",
+          "at": "2026-03-28T12:00:00",
           "type": "exhausted"
         }
       ],
-      "installedAt": "2026-03-28",
+      "headlineRemaining": "耗尽中 8 天",
+      "installedAt": "2026-03-28T12:00:00",
       "kind": "cr2032",
-      "m": 5.717663919673538,
-      "medianDate": "2027-01-26",
-      "medianDays": 304.1934718919141,
+      "m": 8.895717750021483,
+      "medianHours": 7300.643325405929,
+      "medianLineRemaining": "中位 · 约 3 个月",
       "nEff": 1.9395973154362414,
       "nObserved": 2,
       "name": "已入风险窗口",
-      "nominalLifeDays": null,
-      "notifyLeadDays": 14,
-      "p10Days": 191.92980200637732,
-      "ratio": 0.6574763053135602,
+      "nominalLifeHours": null,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2026-10-06T10:18:54.893351",
+      "p10Hours": 4606.315248153051,
+      "p10RemainingHours": -193.68475184694444,
+      "p50ExhaustAt": "2027-01-26T16:38:35.971461",
+      "ratio": 0.6574763053135609,
       "referencePrior": null,
-      "remainingDays": 104,
-      "riskDate": "2026-10-06",
-      "riskRemainingDays": -8,
+      "remainingHours": 2500.6433254058334,
       "sigmaPost": 0.19783146096715923,
       "sigmaPred": 0.35935676833531416,
       "sigmaWithin": 0.3,
       "urgency": "risk"
     },
     "stockUpWindow": {
-      "ageDays": 170,
+      "ageHours": 4080.0,
       "confidence": "medium",
       "events": [
         {
-          "at": "2024-09-14",
+          "at": "2024-09-14T12:00:00",
           "type": "initial"
         },
         {
-          "at": "2025-07-11",
+          "at": "2025-07-11T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2026-04-27",
+          "at": "2026-04-27T12:00:00",
           "type": "exhausted"
         }
       ],
-      "installedAt": "2026-04-27",
+      "headlineRemaining": "约 21 天",
+      "installedAt": "2026-04-27T12:00:00",
       "kind": "cr2032",
-      "m": 5.717663919673538,
-      "medianDate": "2027-02-25",
-      "medianDays": 304.1934718919141,
+      "m": 8.895717750021483,
+      "medianHours": 7300.643325405929,
+      "medianLineRemaining": "中位 · 约 4 个月",
       "nEff": 1.9395973154362414,
       "nObserved": 2,
       "name": "该备货",
-      "nominalLifeDays": null,
-      "notifyLeadDays": 30,
-      "p10Days": 191.92980200637732,
-      "ratio": 0.5588548595165261,
+      "nominalLifeHours": null,
+      "notifyLeadHours": 720.0,
+      "p10ExhaustAt": "2026-11-05T10:18:54.893351",
+      "p10Hours": 4606.315248153051,
+      "p10RemainingHours": 526.3152481530556,
+      "p50ExhaustAt": "2027-02-25T16:38:35.971461",
+      "ratio": 0.5588548595165268,
       "referencePrior": null,
-      "remainingDays": 134,
-      "riskDate": "2026-11-05",
-      "riskRemainingDays": 22,
+      "remainingHours": 3220.6433254058334,
       "sigmaPost": 0.19783146096715923,
       "sigmaPred": 0.35935676833531416,
       "sigmaWithin": 0.3,
       "urgency": "stockUp"
     },
     "threeSamples": {
-      "ageDays": 100,
+      "ageHours": 2400.0,
       "confidence": "medium",
       "events": [
         {
-          "at": "2024-01-18",
+          "at": "2024-01-18T12:00:00",
           "type": "initial"
         },
         {
-          "at": "2024-11-13",
+          "at": "2024-11-13T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2025-08-20",
+          "at": "2025-08-20T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2026-07-06",
+          "at": "2026-07-06T12:00:00",
           "type": "exhausted"
         }
       ],
-      "installedAt": "2026-07-06",
+      "headlineRemaining": "约 4 个月",
+      "installedAt": "2026-07-06T12:00:00",
       "kind": "aa_alkaline",
-      "m": 5.694903526023651,
-      "medianDate": "2027-04-29",
-      "medianDays": 297.34810584818933,
+      "m": 8.872957356371597,
+      "medianHours": 7136.354540356541,
+      "medianLineRemaining": "中位 · 约 6 个月",
       "nEff": 2.7721518987341778,
       "nObserved": 3,
       "name": "三样本",
-      "nominalLifeDays": null,
-      "notifyLeadDays": 14,
-      "p10Days": 226.56805996716415,
-      "ratio": 0.33630616113981526,
+      "nominalLifeHours": null,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2027-02-18T01:38:00.381163",
+      "p10Hours": 5437.6334392119425,
+      "p10RemainingHours": 3037.6334392119443,
+      "p50ExhaustAt": "2027-04-29T20:21:16.345284",
+      "ratio": 0.3363061611398154,
       "referencePrior": null,
-      "remainingDays": 197,
-      "riskDate": "2027-02-18",
-      "riskRemainingDays": 127,
+      "remainingHours": 4736.354540356667,
       "sigmaPost": 0.15,
       "sigmaPred": 0.21213203435596426,
       "sigmaWithin": 0.15,
       "urgency": "normal"
     },
     "tinyIntervals": {
-      "ageDays": 1,
+      "ageHours": 24.0,
       "confidence": "medium",
       "events": [
         {
-          "at": "2026-09-28",
+          "at": "2026-09-28T12:00:00",
           "type": "initial"
         },
         {
-          "at": "2026-10-03",
+          "at": "2026-10-03T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2026-10-09",
+          "at": "2026-10-09T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2026-10-13",
+          "at": "2026-10-13T12:00:00",
           "type": "exhausted"
         }
       ],
-      "installedAt": "2026-10-13",
+      "headlineRemaining": "约 3 天",
+      "installedAt": "2026-10-13T12:00:00",
       "kind": "aaa_alkaline",
-      "m": 1.7794193929951536,
-      "medianDate": "2026-10-19",
-      "medianDays": 5.926414501713993,
+      "m": 4.957473223343099,
+      "medianHours": 142.2339480411358,
+      "medianLineRemaining": "中位 · 约 4 天",
       "nEff": 2.7721518987341778,
       "nObserved": 3,
       "name": "极短间隔",
-      "nominalLifeDays": null,
-      "notifyLeadDays": 14,
-      "p10Days": 4.204827516253757,
-      "ratio": 0.16873608818802455,
+      "nominalLifeHours": null,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2026-10-17T16:54:57.097404",
+      "p10Hours": 100.91586039009015,
+      "p10RemainingHours": 76.91586039,
+      "p50ExhaustAt": "2026-10-19T10:14:02.212948",
+      "ratio": 0.16873608818802463,
       "referencePrior": null,
-      "remainingDays": 5,
-      "riskDate": "2026-10-17",
-      "riskRemainingDays": 3,
+      "remainingHours": 118.2339480411111,
       "sigmaPost": 0.15,
-      "sigmaPred": 0.26778955163814,
-      "sigmaWithin": 0.22183607453828613,
+      "sigmaPred": 0.26778955163814006,
+      "sigmaWithin": 0.22183607453828624,
       "urgency": "stockUp"
     },
     "twoSamples": {
-      "ageDays": 90,
+      "ageHours": 2160.0,
       "confidence": "medium",
       "events": [
         {
-          "at": "2024-12-13",
+          "at": "2024-12-13T12:00:00",
           "type": "initial"
         },
         {
-          "at": "2025-10-09",
+          "at": "2025-10-09T12:00:00",
           "type": "exhausted"
         },
         {
-          "at": "2026-07-16",
+          "at": "2026-07-16T12:00:00",
           "type": "exhausted"
         }
       ],
-      "installedAt": "2026-07-16",
+      "headlineRemaining": "约 3 个月",
+      "installedAt": "2026-07-16T12:00:00",
       "kind": "cr2032",
-      "m": 5.700253446967736,
-      "medianDate": "2027-05-11",
-      "medianDays": 298.9431576033297,
+      "m": 8.878307277315683,
+      "medianHours": 7174.635782479924,
+      "medianLineRemaining": "中位 · 约 6 个月",
       "nEff": 1.9395973154362414,
       "nObserved": 2,
       "name": "两样本",
-      "nominalLifeDays": null,
-      "notifyLeadDays": 14,
-      "p10Days": 188.6171346581533,
-      "ratio": 0.3010605786114756,
+      "nominalLifeHours": null,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2027-01-21T02:48:40.434464",
+      "p10Hours": 4526.811231795686,
+      "p10RemainingHours": 2366.8112317955556,
+      "p50ExhaustAt": "2027-05-11T10:38:08.816928",
+      "ratio": 0.30106057861147517,
       "referencePrior": null,
-      "remainingDays": 209,
-      "riskDate": "2027-01-21",
-      "riskRemainingDays": 99,
+      "remainingHours": 5014.63578248,
       "sigmaPost": 0.19783146096715923,
       "sigmaPred": 0.35935676833531416,
       "sigmaWithin": 0.3,
       "urgency": "normal"
     }
   },
-  "today": "2026-10-14"
+  "today": "2026-10-14T12:00:00"
 }

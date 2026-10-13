@@ -11,7 +11,7 @@ public struct ModelConfig: Sendable, Equatable {
     /// 方差下限。
     ///
     /// 物理依据：同一台设备连换两次同型号电池，寿命天然就有 15%~20% 的差异。
-    /// 样本再多也不该给出「±3 天」这种骗人的精度。
+    /// 样本再多也不该给出「±3 小时」这种骗人的精度。
     public var sigmaMin: Double
     /// 样本不足（< `minSamplesForVariance`）时，样本方差不可识别，用此值兜底。
     public var sigmaUnidentified: Double

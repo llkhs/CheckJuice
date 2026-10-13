@@ -33,19 +33,26 @@ public enum BatteryKind: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    /// 冷启动先验的中位寿命（天）。刻意粗糙，仅用于第一颗电池的粗略估计。
-    public var typicalLifeDays: Double {
+    /// 冷启动先验的中位寿命（**小时**）。刻意粗糙，仅用于第一颗电池的粗略估计。
+    ///
+    /// ⚠️ 这些数值是拍的，没有实测依据 —— 真实寿命主要由**设备功耗**决定，
+    /// 同一块 CR2032 在高功耗传感器里可能只撑 4 天，在电子秤上能撑两年。
+    /// 它们唯一的职责是让「刚添加、还没有任何历史」的设备有个量级正确的起点，
+    /// 所以 `tauDefault` 故意给到 ±50%。攒下 2~3 次真实更换后，数据会把先验压过去。
+    /// 真正的解决办法是让用户手填 / 借用同型号设备的历史（见 `nominalLifeHours`
+    /// 与 `referencePrior`），而不是指望这张表。
+    public var typicalLifeHours: Double {
         switch self {
-        case .cr2032: return 365
-        case .cr2450: return 730
-        case .cr123a: return 900
-        case .aaAlkaline: return 180
-        case .aaLithium: return 540
-        case .aaaAlkaline: return 120
-        case .nineVolt: return 365
-        case .lr44: return 270
-        case .builtinLithium: return 1095
-        case .other: return 365
+        case .cr2032: return 8760            // 365 天
+        case .cr2450: return 17520           // 730 天
+        case .cr123a: return 21600           // 900 天
+        case .aaAlkaline: return 4320        // 180 天
+        case .aaLithium: return 12960        // 540 天
+        case .aaaAlkaline: return 2880       // 120 天
+        case .nineVolt: return 8760          // 365 天
+        case .lr44: return 6480              // 270 天
+        case .builtinLithium: return 26280   // 1095 天
+        case .other: return 8760             // 365 天
         }
     }
 }

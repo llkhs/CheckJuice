@@ -20,42 +20,72 @@ public struct WeightedLogStats: Sendable, Equatable {
 /// 本实现与 Python 参考实现 `reference/lifetime_model.py` **逐行等价**，
 /// 数值一致性由 `GoldenValueTests` 用导出的黄金期望值锁定。
 ///
-/// 刻意**不声明 `Sendable`**：`Calendar` 是否 Sendable 依赖 SDK 版本，
-/// 而本机没有 Swift 工具链、无法编译验证。核心类型的 `Sendable` 已经足够，
-/// 不为了一个用不上的修饰符去赌 CI。
+/// ## ⚠️ 时间单位一律是**小时**（`Double`），时刻类型是 `Date`
+///
+/// 早期版本按「日历天」建模，那是错的，两个理由：
+///
+/// 1. **`Calendar` 的日粒度只有整数天**。真实的 93.6 小时间隔会被读成
+///    3 天（72 小时），误差 −23%。而且这种截断**恒向下**，是系统性低估
+///    而非随机噪声——它会把预测系统性地推晚，而本 App 的失败代价恰恰是
+///    「没电了才发现」。
+/// 2. **分辨率不够**。一块标称 4 天的纽扣电池，「1 天」就等于 25% 的粒度，
+///    数字看着精确，其实全是量化噪声。
+///
+/// 对 300 天的电池这两种算法只差 0.16%，看着无所谓；但同一份代码要同时
+/// 服务「4 小时」和「3 年」两个量级，就必须选细的那个。
 public struct LifetimeModel {
     public let config: ModelConfig
-    public let calendar: Calendar
+    /// 时区只影响**显示取整**（`floorToHour`），不参与任何模型运算。
+    public let timeZone: TimeZone
 
-    public init(config: ModelConfig = .standard, calendar: Calendar = .checkJuiceUTC) {
+    public init(config: ModelConfig = .standard, timeZone: TimeZone = .current) {
         self.config = config
-        self.calendar = calendar
+        self.timeZone = timeZone
     }
 
-    // MARK: - 日期工具
+    // MARK: - 时间工具
 
-    /// 相差多少个「日历天」。用 startOfDay 计算，规避夏令时导致的 23/25 小时天。
-    public func dayCount(from: Date, to: Date) -> Int {
-        let start = calendar.startOfDay(for: from)
-        let end = calendar.startOfDay(for: to)
-        return calendar.dateComponents([.day], from: start, to: end).day ?? 0
-    }
-
-    /// 加若干天。
-    public func date(byAddingDays days: Int, to date: Date) -> Date {
-        calendar.date(byAdding: .day, value: days, to: calendar.startOfDay(for: date)) ?? date
-    }
-
-    /// 四舍五入（正数下等价于 away-from-zero）。
+    /// 两个时刻之间的**精确**小时数（含小数）。
     ///
-    /// ⚠️ 必须显式定义：Python 内建 `round()` 是银行家舍入（`round(0.5) == 0`），
-    /// 与 Swift 的 `.rounded()` 在 `.5` 边界上会差 1 天。参考实现里已用
-    /// `floor(x + 0.5)` 钉死口径，这里保持一致。
-    public static func roundHalfUp(_ x: Double) -> Int {
-        guard x.isFinite else { return 0 }
-        let r = (x + 0.5).rounded(.down)
-        guard r > Double(Int.min), r < Double(Int.max) else { return 0 }
-        return Int(r)
+    /// `Date` 是绝对时刻，`timeIntervalSince` 直接给出秒差——与时区、夏令时无关。
+    /// 绝不要退回「日历天 + `dateComponents`」：那会把 93.6 小时砍成 72 小时。
+    public static func hoursBetween(from: Date, to: Date) -> Double {
+        to.timeIntervalSince(from) / 3600.0
+    }
+
+    /// 从某时刻加上若干小时。
+    public static func date(byAddingHours hours: Double, to date: Date) -> Date {
+        date.addingTimeInterval(hours * 3600.0)
+    }
+
+    /// 把时刻**向下**取整到本地整点。
+    ///
+    /// 显示「将在 XX 耗尽」时必须向下取整：宁可说「23:00」，不要说「次日 00:00」。
+    /// 本 App 所有取整一律朝保守方向。
+    ///
+    /// 与 Python 参考实现的 `floor_to_hour` 口径一致（那边用 naive datetime，即 UTC）。
+    /// 测试里请显式传 `TimeZone(secondsFromGMT: 0)!`，否则本地时区会让结果对不上。
+    public static func floorToHour(_ date: Date, in timeZone: TimeZone = .current) -> Date {
+        let offset = Double(timeZone.secondsFromGMT(for: date))
+        let localSeconds = date.timeIntervalSince1970 + offset
+        let flooredLocal = (localSeconds / 3600.0).rounded(.down) * 3600.0
+        return Date(timeIntervalSince1970: flooredLocal - offset)
+    }
+
+    /// 把小时数**朝零截断**到整数小时。
+    ///
+    /// 为什么朝零而不是向下：两个方向都要「宁少不多」。
+    ///   * 剩余 619.4 小时 → 报「619」，不吹牛说自己撑得久；
+    ///   * 逾期 619.4 小时 → 报「619」，不把逾期说得比实际更严重。
+    /// 若用 `floor`，负数会变成 620 —— 那是**夸大**逾期程度，一样是撒谎。
+    ///
+    /// 取代了旧版的 `roundHalfUp` —— 那玩意存在的唯一理由是把「浮点天」对齐到
+    /// 「整数天」，而「天」这个粒度本身就是 bug。换成小时后不再需要它。
+    public static func wholeHours(_ hours: Double) -> Int {
+        guard hours.isFinite else { return 0 }
+        let truncated = hours.rounded(.towardZero)
+        guard truncated > Double(Int.min), truncated < Double(Int.max) else { return 0 }
+        return Int(truncated)
     }
 
     // MARK: - 先验
@@ -66,37 +96,40 @@ public struct LifetimeModel {
         if let reference = device.referencePrior {
             return (reference.logMedian, reference.tau)
         }
-        if let life = device.nominalLifeDays, life > 0 {
+        if let life = device.nominalLifeHours, life > 0 {
             return (log(life), config.tauUser)
         }
-        return (log(device.kind.typicalLifeDays), config.tauDefault)
+        return (log(device.kind.typicalLifeHours), config.tauDefault)
     }
 
     // MARK: - 观测提取
 
-    /// 把事件序列拆成有效间隔与截尾间隔。
+    /// 把事件序列拆成有效间隔与截尾间隔。**单位：小时（含小数）。**
     ///
     /// * 有效间隔：终点事件为 `.exhausted` → 计入寿命统计
     /// * 截尾间隔：终点事件为 `.preventive` / `.faulty` → 剔除出寿命统计
     ///   （但起算点照样重置，这一点由 `Device.installedAt` 保证）
+    ///
+    /// ⚠️ 旧版这里写的是 `Double(dayCount(from:to:))` —— 整数天，
+    /// 会把 93.6 小时读成 3 天（−23%），而且**恒向下**、是系统性低估。
     public func observedIntervals(
         _ device: Device
-    ) -> (exhausted: [Double], censored: [(days: Double, kind: EventKind)]) {
+    ) -> (exhausted: [Double], censored: [(hours: Double, kind: EventKind)]) {
         let events = device.sortedEvents
         var exhausted: [Double] = []
-        var censored: [(days: Double, kind: EventKind)] = []
+        var censored: [(hours: Double, kind: EventKind)] = []
         guard events.count >= 2 else { return (exhausted, censored) }
 
         for index in 1..<events.count {
             let previous = events[index - 1]
             let current = events[index]
-            let days = Double(dayCount(from: previous.at, to: current.at))
-            guard days > 0 else { continue }
+            let hours = Self.hoursBetween(from: previous.at, to: current.at)
+            guard hours > 0 else { continue }
 
             if current.kind.countsAsLifetimeSample {
-                exhausted.append(days)
+                exhausted.append(hours)
             } else if current.kind.isCensored {
-                censored.append((days, current.kind))
+                censored.append((hours, current.kind))
             }
             // .initial 不作为间隔终点，忽略。
         }
@@ -200,13 +233,13 @@ public struct LifetimeModel {
 
     // MARK: - 预测
 
-    /// 产出完整预测。设备没有事件时返回 `nil`。
-    public func predict(_ device: Device, today: Date) -> Prediction? {
+    /// 产出完整预测。`now` 是「现在」这个**时刻**。设备没有事件时返回 `nil`。
+    public func predict(_ device: Device, now: Date) -> Prediction? {
         guard let installed = device.installedAt, let posterior = fit(device) else {
             return nil
         }
 
-        let medianDays = exp(posterior.logMean)
+        let medianHours = exp(posterior.logMean)
 
         // ★ 关键设计（相对初稿的修订）：
         // 风险窗口要预测的是「**当前这一颗**电池什么时候死」，而不是「期望寿命的下界」。
@@ -217,23 +250,27 @@ public struct LifetimeModel {
             + posterior.withinDeviceSigma * posterior.withinDeviceSigma
         let sigmaPrediction = min(varianceSum.squareRoot(), config.sigmaPredictionCap)
 
-        let p10Days = exp(posterior.logMean - config.z10 * sigmaPrediction)
+        let p10Hours = exp(posterior.logMean - config.z10 * sigmaPrediction)
 
-        let medianDate = date(byAddingDays: Self.roundHalfUp(medianDays), to: installed)
-        let riskDate = date(byAddingDays: Self.roundHalfUp(p10Days), to: installed)
+        // ⚠️ 核心数值**一律不取整**。`p50ExhaustAt` / `p10ExhaustAt` 保留完整精度，
+        // 只有最终**显示**时才用 `floorToHour` 对齐到整点。
+        // 旧版先 `roundHalfUp` 成整天再加天 —— 那等于在模型数值上又砍一刀精度，
+        // 对 4 天寿命的纽扣电池就是 25% 的额外误差。
+        let p50ExhaustAt = Self.date(byAddingHours: medianHours, to: installed)
+        let p10ExhaustAt = Self.date(byAddingHours: p10Hours, to: installed)
 
-        let ageDays = dayCount(from: installed, to: today)
-        let remainingDays = dayCount(from: today, to: medianDate)
-        let riskRemainingDays = dayCount(from: today, to: riskDate)
-        let ratio = medianDays > 0 ? Double(ageDays) / medianDays : 1.0
+        let ageHours = Self.hoursBetween(from: installed, to: now)
+        let remainingHours = Self.hoursBetween(from: now, to: p50ExhaustAt)
+        let p10RemainingHours = Self.hoursBetween(from: now, to: p10ExhaustAt)
+        let ratio = medianHours > 0 ? ageHours / medianHours : 1.0
 
         let urgency: Urgency
-        if remainingDays < 0 {
-            urgency = .overdue                                   // 已过预测中位日
-        } else if riskRemainingDays <= 0 {
-            urgency = .risk                                      // 已进入风险窗口（P10 之后）
-        } else if riskRemainingDays <= device.notifyLeadDays {
-            urgency = .stockUp                                   // 距风险窗口开启不足 lead 天
+        if remainingHours < 0 {
+            urgency = .overdue                    // 已过预测的中位耗尽时刻
+        } else if p10RemainingHours <= 0 {
+            urgency = .risk                       // 已进入风险窗口（P10 之后）
+        } else if p10RemainingHours <= device.notifyLeadHours {
+            urgency = .stockUp                    // 距风险窗口开启不足 lead 小时
         } else {
             urgency = .normal
         }
@@ -247,13 +284,13 @@ public struct LifetimeModel {
         }
 
         return Prediction(
-            medianDays: medianDays,
-            p10Days: p10Days,
-            medianDate: medianDate,
-            riskDate: riskDate,
-            remainingDays: remainingDays,
-            riskRemainingDays: riskRemainingDays,
-            ageDays: ageDays,
+            medianHours: medianHours,
+            p10Hours: p10Hours,
+            p50ExhaustAt: p50ExhaustAt,
+            p10ExhaustAt: p10ExhaustAt,
+            remainingHours: remainingHours,
+            p10RemainingHours: p10RemainingHours,
+            ageHours: ageHours,
             ratio: ratio,
             sigmaPrediction: sigmaPrediction,
             urgency: urgency,
@@ -266,17 +303,17 @@ public struct LifetimeModel {
 
     /// 为一批设备出预测并按紧急度排序（最紧急在前）。
     /// 小组件与列表页都走这个入口，保证两处排序逻辑一致。
-    public func predictions(for devices: [Device], today: Date) -> [(device: Device, prediction: Prediction)] {
+    public func predictions(for devices: [Device], now: Date) -> [(device: Device, prediction: Prediction)] {
         devices
             .compactMap { device in
-                guard let prediction = predict(device, today: today) else { return nil }
+                guard let prediction = predict(device, now: now) else { return nil }
                 return (device: device, prediction: prediction)
             }
             .sorted { lhs, rhs in
                 let l = urgencyRank(lhs.prediction.urgency)
                 let r = urgencyRank(rhs.prediction.urgency)
                 if l != r { return l < r }
-                return lhs.prediction.riskRemainingDays < rhs.prediction.riskRemainingDays
+                return lhs.prediction.p10RemainingHours < rhs.prediction.p10RemainingHours
             }
     }
 
@@ -288,16 +325,4 @@ public struct LifetimeModel {
         case .normal: return 3
         }
     }
-}
-
-public extension Calendar {
-    /// 模型内部统一使用的 UTC 日历：日粒度运算不受时区 / 夏令时影响。
-    ///
-    /// 测试与跨设备同步用这个。面向用户的 App 应传入 `Calendar.current`，
-    /// 这样「今天」的边界与用户的直觉一致。
-    static let checkJuiceUTC: Calendar = {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        return calendar
-    }()
 }

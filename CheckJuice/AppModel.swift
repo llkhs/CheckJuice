@@ -26,20 +26,44 @@ final class AppModel {
 
     var devices: [Device] = []
 
+    /// 用户在设置页选的主文案样式（「耗尽时刻」/「剩余时长」）。
+    ///
+    /// 持久化交给 `DisplaySettings`（App Group 共享域）—— 见那边的注释：
+    /// M2b 的交互式小组件要在扩展进程里按同样样式渲染，所以设置必须共享。
+    var displayStyle: ExhaustDisplayStyle = DisplaySettings.style
+
+    /// 列表主文案下面那行「中位」小字是否显示。
+    var showMedianSubline: Bool = DisplaySettings.showMedian
+
     init() {
         devices = deviceStore.load()
         reloadWidget()
     }
 
+    /// 切换显示样式：落盘 + 立刻重算快照刷新小组件。
+    func setDisplayStyle(_ style: ExhaustDisplayStyle) {
+        guard style != displayStyle else { return }
+        displayStyle = style
+        DisplaySettings.style = style
+        reloadWidget()
+    }
+
+    /// 中位小字的开关。只影响 App 自己的列表，小组件不显示小字，故不刷新时间线。
+    func setShowMedianSubline(_ show: Bool) {
+        guard show != showMedianSubline else { return }
+        showMedianSubline = show
+        DisplaySettings.showMedian = show
+    }
+
     /// 全部设备按紧急度排序 —— 最该处理的排最前。
     var ranked: [RankedDevice] {
-        engine.predictions(for: devices, today: Date())
+        engine.predictions(for: devices, now: Date())
             .map { RankedDevice(device: $0.device, prediction: $0.prediction) }
             .sorted { lhs, rhs in
                 let a = Self.rank(lhs.prediction.urgency)
                 let b = Self.rank(rhs.prediction.urgency)
                 if a != b { return a < b }
-                return lhs.prediction.remainingDays < rhs.prediction.remainingDays
+                return lhs.prediction.remainingHours < rhs.prediction.remainingHours
             }
     }
 
@@ -54,9 +78,9 @@ final class AppModel {
 
     // MARK: - 变更
 
-    func add(name: String, kind: BatteryKind, installedAt: Date, notifyLeadDays: Int) {
+    func add(name: String, kind: BatteryKind, installedAt: Date, notifyLeadHours: Double) {
         devices.append(
-            .newlyAdded(name: name, kind: kind, on: installedAt, notifyLeadDays: notifyLeadDays)
+            .newlyAdded(name: name, kind: kind, at: installedAt, notifyLeadHours: notifyLeadHours)
         )
         commit()
     }
@@ -82,10 +106,16 @@ final class AppModel {
     }
 
     /// 重算并刷新小组件。不调这个，小组件会一直显示上次的快照。
+    ///
+    /// 时间基准只取一次 `Date()` 并全程复用：同一屏里所有设备的 `remainingHours`
+    /// 必须基于同一个「现在」，否则彼此的基准时刻能差几毫秒。
+    /// 现在无关紧要，但排序、聚合、跨设备对比一旦上线就会露馅。
     func reloadWidget() {
-        let snapshots = engine.predictions(for: devices, today: Date())
-            .map { DeviceSnapshot(device: $0.device, prediction: $0.prediction) }
-        try? snapshotStore.save(WidgetSnapshot(generatedAt: Date(), devices: snapshots))
+        let now = Date()
+        let style = displayStyle
+        let snapshots = engine.predictions(for: devices, now: now)
+            .map { DeviceSnapshot(device: $0.device, prediction: $0.prediction, style: style) }
+        try? snapshotStore.save(WidgetSnapshot(generatedAt: now, devices: snapshots))
         WidgetCenter.shared.reloadAllTimelines()
     }
 }
