@@ -27,7 +27,7 @@ public struct LifetimeModel {
     public let config: ModelConfig
     public let calendar: Calendar
 
-    public init(config: ModelConfig = .standard, calendar: Calendar = .batteryWatchUTC) {
+    public init(config: ModelConfig = .standard, calendar: Calendar = .checkJuiceUTC) {
         self.config = config
         self.calendar = calendar
     }
@@ -295,7 +295,7 @@ public extension Calendar {
     ///
     /// 测试与跨设备同步用这个。面向用户的 App 应传入 `Calendar.current`，
     /// 这样「今天」的边界与用户的直觉一致。
-    static let batteryWatchUTC: Calendar = {
+    static let checkJuiceUTC: Calendar = {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         return calendar

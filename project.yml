@@ -1,0 +1,90 @@
+# XcodeGen 工程定义 —— 唯一的工程真相。
+#
+# 为什么不直接提交 .xcodeproj：这个 App 有 3 个 target（App / Widget 扩展 / 依赖的
+# Swift Package），手写 pbxproj 必炸，而且合并冲突没法看。改这里、重新生成即可。
+#
+#   brew install xcodegen && xcodegen generate
+#
+name: CheckJuice
+
+options:
+  bundleIdPrefix: com.llkhs
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+packages:
+  CheckJuiceKit:
+    path: CheckJuiceCore
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    # 允许在 CI 上无签名编译（CODE_SIGNING_ALLOWED=NO 会覆盖这两项）
+    CODE_SIGN_STYLE: Manual
+    # 自签场景：签名由手机端工具完成，CI 只负责产出未签名 IPA
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+targets:
+  # ─────────────────────────── 主 App ───────────────────────────
+  CheckJuice:
+    type: application
+    platform: iOS
+    sources:
+      - path: CheckJuice
+    dependencies:
+      - package: CheckJuiceKit
+        product: CheckJuiceCore
+      - package: CheckJuiceKit
+        product: CheckJuiceStore
+      - target: CheckJuiceWidget
+    settings:
+      base:
+        # ⚠️ 必须落在描述文件覆盖的 App ID 范围内，否则签不上。
+        PRODUCT_BUNDLE_IDENTIFIER: com.llkhs.CheckJuice
+        PRODUCT_NAME: CheckJuice
+        CODE_SIGN_ENTITLEMENTS: CheckJuice/CheckJuice.entitlements
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Check Juice
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  # ───────────────────────── 小组件扩展 ─────────────────────────
+  # 独立 Bundle ID（.widget 后缀），因此需要它自己那份描述文件。
+  # 卖家若只覆盖了主 App 的 App ID，这一步会签不上——那时见分晓。
+  CheckJuiceWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: CheckJuiceWidget
+    dependencies:
+      - package: CheckJuiceKit
+        product: CheckJuiceCore
+      - package: CheckJuiceKit
+        product: CheckJuiceStore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.llkhs.CheckJuice.widget
+        PRODUCT_NAME: CheckJuiceWidget
+        INFOPLIST_FILE: CheckJuiceWidget/Info.plist
+        CODE_SIGN_ENTITLEMENTS: CheckJuiceWidget/CheckJuiceWidget.entitlements
+        SKIP_INSTALL: YES
+
+# ───────────────────────── Scheme ─────────────────────────
+# 显式声明并共享。CI 上没人会用 Xcode 打开工程，scheme 不会被自动创建，
+# 所以必须在这里写死，否则 xcodebuild -scheme CheckJuice 直接报找不到 scheme。
+schemes:
+  CheckJuice:
+    build:
+      targets:
+        CheckJuice: all
+    run:
+      config: Debug
+    archive:
+      config: Release

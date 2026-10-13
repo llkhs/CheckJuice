@@ -1,0 +1,66 @@
+name: Build
+
+# CI 只负责「能不能编译过」和「产出一个可签名的 IPA」。
+# 签名在手机端做（Esign 之类），所以这里 CODE_SIGNING_ALLOWED=NO。
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-ios:
+    # macos-15 自带 Xcode 16.x，编 iOS 17 目标足够。
+    # 若以后要 iOS 26 SDK，把这里换成更新的 runner。
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 打印工具链版本
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      - name: 生成 Xcode 工程
+        run: xcodegen generate
+
+      - name: 编译（不签名）
+        run: |
+          xcodebuild \
+            -project CheckJuice.xcodeproj \
+            -scheme CheckJuice \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: 打包未签名 IPA
+        run: |
+          APP="build/Build/Products/Release-iphoneos/CheckJuice.app"
+          test -d "$APP" || { echo "找不到 $APP"; ls -R build/Build/Products; exit 1; }
+          echo "--- 扩展是否被打进去 ---"
+          ls -la "$APP/PlugIns" || echo "⚠️ PlugIns 目录不存在，小组件没被嵌入"
+          rm -rf Payload CheckJuice-unsigned.ipa
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry CheckJuice-unsigned.ipa Payload
+          ls -lh CheckJuice-unsigned.ipa
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: CheckJuice-unsigned-ipa
+          path: CheckJuice-unsigned.ipa
+          if-no-files-found: error

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  ⚠️ 这个值必须与描述文件（.mobileprovision）里
+	  com.apple.security.application-groups 列出的某一项**逐字符相同**。
+	  填错 → 主 App 和小组件各自拿到不同容器 → 小组件永远读不到数据。
+
+	  当前是占位值，签名阶段按你的描述文件实际内容替换。
+	  两个文件（本文件 + CheckJuiceWidget.entitlements）必须一致。
+	-->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.llkhs.CheckJuice</string>
+	</array>
+</dict>
+</plist>

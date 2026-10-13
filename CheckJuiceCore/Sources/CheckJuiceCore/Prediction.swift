@@ -32,7 +32,7 @@ public struct Posterior: Sendable, Equatable {
 ///
 /// ⚠️ **必须显式展示给用户**。1 个样本和 10 个样本的预测绝不能画等号。
 /// 这是这个 App 的诚信底线：宁可承认「我不知道」，也不要给一个看起来很准的假数字。
-public enum Confidence: String, Sendable, CaseIterable {
+public enum Confidence: String, Codable, Sendable, CaseIterable {
     case low
     case medium
     case high
@@ -56,7 +56,7 @@ public enum Confidence: String, Sendable, CaseIterable {
 }
 
 /// 紧急度分级。
-public enum Urgency: String, Sendable, CaseIterable {
+public enum Urgency: String, Codable, Sendable, CaseIterable {
     /// 🔴 已超过预测中位日 —— 随时可能没电。
     case overdue
     /// 🟠 已进入风险窗口（P10）—— 该换了。
@@ -142,9 +142,16 @@ public extension Prediction {
     /// 小组件 / 列表上显示的一行短文本。
     var shortDescription: String {
         switch urgency {
-        case .overdue: return "逾期 \(abs(remainingDays)) 天"
-        case .risk: return "≤ \(abs(riskRemainingDays)) 天"
-        case .stockUp, .normal: return "\(remainingDays) 天"
+        case .overdue:
+            return "逾期 \(abs(remainingDays)) 天"
+        case .risk:
+            // ⚠️ 用 remainingDays，不是 riskRemainingDays！
+            // 后者是「进入风险窗口已经过了几天」，拿它上屏会显示成一个荒唐的小数字
+            // （实测某设备年龄 200 天 / P10 189 天 → riskRemainingDays = -11，
+            //   但实际距中位日还有 99 天）。这里要的是「大概还剩多少」。
+            return "≤ \(max(remainingDays, 0)) 天"
+        case .stockUp, .normal:
+            return "\(remainingDays) 天"
         }
     }
 
