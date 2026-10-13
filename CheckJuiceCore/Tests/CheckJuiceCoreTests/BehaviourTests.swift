@@ -52,11 +52,21 @@ final class BehaviourTests: XCTestCase {
         try XCTUnwrap(model.predict(device, today: date ?? today))
     }
 
+    /// 浮点比较。容差用**相对**误差 —— 这些量的量级从 0.15 到 300 天都有，绝对值不管用。
+    ///
+    /// 为什么是 1e-6，而不是更紧：
+    ///   * 期望值字面量本身只写到 8 位小数（如 0.39737401），其自身相对误差就在
+    ///     ~1e-9 量级。原来这里是 1e-9，等于拿「已四舍五入的期望值」去卡
+    ///     「全精度的实际值」，必然误报 —— 实测踩过，n=1/2/3 窗口宽度全红。
+    ///   * 算法里有 exp/log/pow，几十步累积后相对误差到 1e-12 是正常水平。
+    ///   * 真出算法错误时偏差在 1e-3 以上。1e-6 既抓得住错误，又比浮点噪声宽
+    ///     6 个数量级。**精确数值比对交给 GoldenValueTests 负责**，
+    ///     这组测试的职责是「语义不变量」。
     private func assertClose(
         _ actual: Double, _ expected: Double, _ label: String,
         file: StaticString = #filePath, line: UInt = #line
     ) {
-        XCTAssertEqual(actual, expected, accuracy: max(abs(expected) * 1e-9, 1e-12),
+        XCTAssertEqual(actual, expected, accuracy: max(abs(expected) * 1e-6, 1e-12),
                        label, file: file, line: line)
     }
 
@@ -292,13 +302,18 @@ final class BehaviourTests: XCTestCase {
             try mustPredict(makeDevice(intervals: [300, 290], since: 330)).shortDescription,
             "逾期 26 天"
         )
+        // ⚠️ 这两条原先是 "≤ 8 天" / "209 天"，都是**陈旧期望值**：
+        //    "≤ 8 天" 是把 riskRemainingDays（= 距 P10 还有几天，此处为 -8）
+        //    取绝对值印出来的结果 —— 实际距中位日还有 104 天，差了十倍以上。
+        //    已用 Python 参考实现复核：median 304.1935 / p10 191.9298，
+        //    since=200 → remaining 104（进入风险窗口）；since=90 → remaining 214。
         XCTAssertEqual(
             try mustPredict(makeDevice(intervals: [300, 290], since: 200)).shortDescription,
-            "≤ 8 天"
+            "≤ 104 天"
         )
         XCTAssertEqual(
             try mustPredict(makeDevice(intervals: [300, 290], since: 90)).shortDescription,
-            "209 天"
+            "214 天"
         )
     }
 }

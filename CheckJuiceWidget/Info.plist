@@ -1,9 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  小组件扩展的 Info.plist。
+
+  ⚠️ 这些标准键必须**显式写全**，不能只写 NSExtension。
+  Xcode 在「嵌入二进制校验」阶段会读 .appex 的 CFBundleIdentifier，
+  拿它和主 App 的比对：必须是主 App bundle id 的前缀。
+  这里若缺 CFBundleIdentifier，校验读到空值 →
+    "Embedded binary's bundle identifier is not prefixed with the parent app's bundle identifier."
+  实测踩过。Xcode 自带的扩展模板本来就是写全的，照抄即可。
+
+  $(...) 占位符由构建时展开：PRODUCT_BUNDLE_IDENTIFIER 来自 project.yml。
+-->
 <plist version="1.0">
 <dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>Check Juice</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleVersion</key>
+	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionPointIdentifier</key>

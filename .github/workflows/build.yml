@@ -41,6 +41,11 @@ jobs:
           fi
           exit "$status"
 
+      - name: 校验 Bundle ID 前缀关系
+        # 提前暴露「嵌入二进制 bundle id 不是主 App 前缀」这类错误。
+        # 它若在编译后才报，会浪费一整个构建周期才知道原因。
+        run: bash .github/scripts/dump-bundle-ids.sh
+
       - name: 编译（不签名）
         run: |
           set +e
@@ -59,6 +64,21 @@ jobs:
             bash .github/scripts/report-errors.sh /tmp/xcodebuild.log
           fi
           exit "$status"
+
+      - name: 失败诊断：打印产物内实际的 bundle id
+        # 只在上一步失败时跑。目的是把「构建产物里真正写进去了什么」暴露出来，
+        # 而不是只看构建配置声明了什么 —— 两者不一致正是嵌入校验失败的原因。
+        if: failure()
+        run: |
+          count=0
+          for bundle in $(find build/Build/Products -maxdepth 4 \( -name '*.appex' -o -name '*.app' \) 2>/dev/null); do
+            count=$((count + 1))
+            id=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$bundle/Info.plist" 2>/dev/null || echo '（读取失败）')
+            echo "::error::产物 ${bundle#build/Build/Products/} → CFBundleIdentifier = $id"
+          done
+          if [ "$count" -eq 0 ]; then
+            echo "::error::build/Build/Products 下找不到任何 .app/.appex，构建可能更早就失败了"
+          fi
 
       - name: 打包未签名 IPA
         run: |
