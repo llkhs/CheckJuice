@@ -1,6 +1,19 @@
-# CheckJuice — 设计文档 v0.1
+# Check Juice — 设计文档 v0.3
 
 > 用「电池更换事件」驱动预测的设备续航管理器。主 App 记账 + iOS 17 桌面小组件倒计时。
+
+## 0. 命名
+
+| 用途 | 值 | 说明 |
+|---|---|---|
+| 仓库 | `CheckJuice` | 单平台用纯名。`-ios` 后缀是多平台套装消歧用的（lottie-ios/lottie-android），单平台挂它反而显得像掉了零件。真实单平台项目 Alamofire / SnapKit 均无后缀 |
+| 显示名 | `Check Juice` | 桌面图标下那行。juice = 俚语「电」 |
+| SPM 模块 | `CheckJuiceCore` / `CheckJuiceStore` | 算法 / 持久化，两个 target |
+| Bundle ID | `com.llkhs.CheckJuice` | **占位**，签名阶段改为描述文件实际覆盖的值 |
+| App Group | `group.com.llkhs.CheckJuice` | **占位**，签名阶段从描述文件读取 |
+
+> ⚠️ `-ios` 后缀**不要加**。仓库名以后可以随便改（GitHub 会自动重定向），
+> 但 Bundle ID 一旦上架/装到设备就基本不能动，改它等于换一个 App、用户数据全丢。
 
 ## 1. 产品范围
 
@@ -334,15 +347,28 @@ GitHub Actions → archive → exportArchive（p12 + .mobileprovision 手动签�
 
 ## 8. 里程碑
 
-| # | 内容 | 交付 |
-|---|---|---|
-| M1 | Core 包：模型 + `LifetimeModel` + 单元测试 | 算法可验证，先跑通数学 |
-| M2 | XcodeGen 工程 + App + SwiftData + 增删改查界面 | 手机能跑通记账 |
-| M3 | 预测接入 + 通知 | 能收到"该备电池了" |
-| M4 | 小组件（App Group + 快照 + 交互按钮） | 桌面能看能点 |
-| M5 | CI 签名 + TestFlight 上传 | 自动出包 |
+| # | 内容 | 状态 | 交付 |
+|---|---|---|---|
+| M1 | Core 包：模型 + `LifetimeModel` + 单元测试 | ✅ 完成 | 算法可验证，数值与 Python 参考实现锁定 |
+| M2a | XcodeGen 工程 + App/Widget 骨架 + CI 出未签名 IPA | ✅ 完成 | 打通「本机写码 → CI 编译 → 出包」全链路 |
+| M2b | 完整界面：设备列表/详情/编辑 + 通知 | ⬜ 待做 | 手机能跑通记账 |
+| M3 | 交互式小组件（`Button(intent:)` 就地换电池） | ⬜ 待做 | 桌面能看能点 |
+| M4 | 签名（读描述文件生成 entitlements）+ 装真机 | ⬜ 待做 | 手机上真能用 |
+| M5 | Android 移植（可选） | ⬜ 搁置 | 抄 Kotlin + 跑黄金数值 |
 
-**M1 先做**：模型是唯一容易算错的地方，先用测试锁死，再谈界面。
+> **修订记录（v0.3）**
+> - M2 原写「SwiftData」→ **改为 JSON 持久化**。数据量只有几十条，
+>   SwiftData 是杀鸡用牛刀；且本机无法编译验证，SwiftData 的 API 复杂、出错面大。
+> - M5 原写「TestFlight 上传」→ **改为 CI 出未签名 IPA + 手机自签**。
+>   用户用的是带 p12 的签名证书，不经 Apple 后台也能签，且签名材料不必进 GitHub。
+> - Android 从「未规划」改为「搁置但早有准备」：核心数学已被
+>   Python 参考实现 + `golden_values.json` 固化为语言无关规格，
+>   移植时抄完跑黄金数值即可验证，不依赖 iOS 这边的任何代码。
+
+**执行顺序的理由**：**M1 先做** —— 模型是唯一容易算错的地方，
+先用测试锁死再谈界面。**M2a 先于 M2b** —— 本机没有 Swift 工具链，
+必须先让 CI 把编译错误炸出来，趁代码量小（~300 行）的时候改，
+而不是写完 2000 行 UI 再一起爆炸。
 
 ---
 
