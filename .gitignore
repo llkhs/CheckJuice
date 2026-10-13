@@ -1,0 +1,28 @@
+# macOS 垃圾
+.DS_Store
+.AppleDouble
+
+# Xcode 生成物
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# XcodeGen 生成物 —— 工程文件不入库，project.yml 才是唯一真相
+*.xcodeproj/
+*.xcworkspace/
+
+# SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+
+# 签名材料：绝对不能入库
+*.p12
+*.mobileprovision
+*.cer
+*.ipa
+*.dSYM.zip
+AuthKey_*.p8
