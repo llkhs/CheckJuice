@@ -1,5 +1,5 @@
 import XCTest
-@testable import BatteryWatchCore
+@testable import CheckJuiceCore
 
 /// 与 Python 参考实现的**数值一致性**测试。
 ///

@@ -30,7 +30,7 @@ jobs:
           python3 --version
 
       - name: 核心包单元测试
-        working-directory: BatteryWatchCore
+        working-directory: CheckJuiceCore
         run: swift test
 
       - name: 校验黄金数值与 Python 参考实现一致
@@ -39,7 +39,7 @@ jobs:
         run: |
           python3 reference/emit_golden.py > /dev/null
           if ! diff -u \
-            BatteryWatchCore/Tests/BatteryWatchCoreTests/Resources/golden_values.json \
+            CheckJuiceCore/Tests/CheckJuiceCoreTests/Resources/golden_values.json \
             reference/golden_values.json; then
             echo "::error::黄金数值与 Python 参考实现不一致。"
             echo "::error::要么算法改动没同步到两边，要么忘了刷新测试资源。"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-BatteryWatch · 模型验证脚本
+CheckJuice · 模型验证脚本
 ============================
 两部分：
   A. 场景演示 —— 6 个人工构造的设备，看模型输出是否讲得通

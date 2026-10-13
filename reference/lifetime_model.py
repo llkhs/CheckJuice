@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-BatteryWatch · 寿命预测模型 —— 参考实现（Reference Implementation）
+CheckJuice · 寿命预测模型 —— 参考实现（Reference Implementation）
 ====================================================================
 存在意义
 --------
 本机 iSH 没有 Swift 工具链，Swift 代码写出来无法编译、无法测试。
 因此在 Swift 落地之前，先用可运行的语言把 DESIGN.md §3 的数学实现并实测，
-验证通过后逐行移植到 BatteryWatchCore（纯 Swift Package）。
+验证通过后逐行移植到 CheckJuiceCore（纯 Swift Package）。
 本文件产出的数值同时作为 Swift 单元测试的黄金期望值（golden values）。
 
 设计纪律（对应 DESIGN.md）

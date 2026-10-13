@@ -1,4 +1,4 @@
-# BatteryWatch — 设计文档 v0.1
+# CheckJuice — 设计文档 v0.1
 
 > 用「电池更换事件」驱动预测的设备续航管理器。主 App 记账 + iOS 17 桌面小组件倒计时。
 
@@ -167,8 +167,8 @@ Kish 有效样本量:  n_eff = (Σwᵢ)² / Σwᵢ²
 ### 3.9 实测验证（已完成，M1 部分达成）✅
 
 本机无 Swift 工具链，故先用 Python 落地同一套数学并实测，验证通过后再逐行移植。
-代码：[reference/lifetime_model.py](minis://mounts/Minis-Home/BatteryWatch/reference/lifetime_model.py) ·
-[reference/validate_model.py](minis://mounts/Minis-Home/BatteryWatch/reference/validate_model.py)
+代码：[reference/lifetime_model.py](minis://mounts/Minis-Home/CheckJuice/reference/lifetime_model.py) ·
+[reference/validate_model.py](minis://mounts/Minis-Home/CheckJuice/reference/validate_model.py)
 
 **A. 场景演示**（8 个构造场景，含坏电池、预防性更换、逾期）
 
@@ -203,24 +203,24 @@ Kish 有效样本量:  n_eff = (Σwᵢ)² / Σwᵢ²
 ## 4. 架构
 
 ```
-BatteryWatch/
+CheckJuice/
 ├── project.yml                        # XcodeGen：工程由配置生成，不手写 pbxproj
-├── BatteryWatchCore/                  # SPM 包 · 纯 Foundation，无 UI/无 SwiftData
-│   ├── Sources/BatteryWatchCore/
+├── CheckJuiceCore/                  # SPM 包 · 纯 Foundation，无 UI/无 SwiftData
+│   ├── Sources/CheckJuiceCore/
 │   │   ├── Models.swift               # Device / BatteryKind / ReplacementEvent（值类型）
 │   │   ├── LifetimeModel.swift        # §3 全部数学
 │   │   ├── Prediction.swift           # 输出结构 + 紧急度分级
 │   │   └── WidgetSnapshot.swift       # 小组件读的 Codable 快照
-│   └── Tests/BatteryWatchCoreTests/   # 纯函数，好测；模型是这里的主要测试对象
-├── BatteryWatch/                      # 主 App
-│   ├── BatteryWatchApp.swift
+│   └── Tests/CheckJuiceCoreTests/   # 纯函数，好测；模型是这里的主要测试对象
+├── CheckJuice/                      # 主 App
+│   ├── CheckJuiceApp.swift
 │   ├── Persistence/                   # SwiftData @Model + Store（App Group 容器）
 │   ├── Views/                         # 列表 / 详情 / 添加 / 记一次更换
 │   ├── Intents/                       # LogReplacementIntent / SelectDeviceIntent
-│   └── BatteryWatch.entitlements      # App Group
-├── BatteryWatchWidget/                # 小组件扩展
+│   └── CheckJuice.entitlements      # App Group
+├── CheckJuiceWidget/                # 小组件扩展
 │   ├── BatteryWidget.swift            # 只读快照 JSON 渲染，不跑模型
-│   └── BatteryWatchWidget.entitlements
+│   └── CheckJuiceWidget.entitlements
 └── .github/workflows/build.yml
 ```
 

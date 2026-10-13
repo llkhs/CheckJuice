@@ -1,5 +1,5 @@
 import XCTest
-@testable import BatteryWatchCore
+@testable import CheckJuiceCore
 
 /// 行为不变量测试。
 ///
