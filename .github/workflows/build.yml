@@ -31,10 +31,19 @@ jobs:
         run: brew install xcodegen
 
       - name: 生成 Xcode 工程
-        run: xcodegen generate
+        run: |
+          set +e
+          xcodegen generate 2>&1 | tee /tmp/xcodegen.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            # project.yml 语法错误在这里暴露，是反馈最快的失败点。
+            bash .github/scripts/report-errors.sh /tmp/xcodegen.log 'error|Error'
+          fi
+          exit "$status"
 
       - name: 编译（不签名）
         run: |
+          set +e
           xcodebuild \
             -project CheckJuice.xcodeproj \
             -scheme CheckJuice \
@@ -44,7 +53,12 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            build 2>&1 | tee /tmp/xcodebuild.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            bash .github/scripts/report-errors.sh /tmp/xcodebuild.log
+          fi
+          exit "$status"
 
       - name: 打包未签名 IPA
         run: |

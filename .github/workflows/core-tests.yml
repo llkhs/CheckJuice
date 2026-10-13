@@ -31,7 +31,15 @@ jobs:
 
       - name: 核心包单元测试
         working-directory: CheckJuiceCore
-        run: swift test
+        run: |
+          # set +e：先把结果抓下来，再决定退出码，否则失败就直接跳过了上报。
+          set +e
+          swift test 2>&1 | tee /tmp/swift-test.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            bash ../.github/scripts/report-errors.sh /tmp/swift-test.log
+          fi
+          exit "$status"
 
       - name: 校验黄金数值与 Python 参考实现一致
         # 这是本项目的核心不变量：Swift 实现必须与 Python 参考实现给出同样的数值。
