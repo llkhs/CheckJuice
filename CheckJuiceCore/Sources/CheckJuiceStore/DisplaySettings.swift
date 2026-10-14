@@ -1,4 +1,5 @@
 import Foundation
+import CheckJuiceCore
 
 /// 显示相关设置。
 ///
