@@ -17,10 +17,9 @@ final class GoldenValueTests: XCTestCase {
 
     private struct GoldenCase: Decodable {
         var name: String
-        var kind: String
         var installedAt: String
         var notifyLeadHours: Double
-        var nominalLifeHours: Double?
+        var nominalLifeHours: Double
         var referencePrior: ReferencePrior?
         var events: [GoldenEvent]
 
@@ -121,7 +120,6 @@ final class GoldenValueTests: XCTestCase {
             let gold = golden.cases[key]!
 
             // --- 用黄金文件里的配置重建 Device（完全数据驱动） ---
-            let kind = try XCTUnwrap(BatteryKind(rawValue: gold.kind), "未知电池种类 \(gold.kind)")
             let events: [ReplacementEvent] = try gold.events.map { event in
                 let eventKind = try XCTUnwrap(
                     EventKind(rawValue: event.type), "未知事件类型 \(event.type)"
@@ -130,7 +128,6 @@ final class GoldenValueTests: XCTestCase {
             }
             let device = Device(
                 name: gold.name,
-                kind: kind,
                 events: events,
                 notifyLeadHours: gold.notifyLeadHours,
                 nominalLifeHours: gold.nominalLifeHours,
@@ -182,12 +179,11 @@ final class GoldenValueTests: XCTestCase {
 
         for key in golden.cases.keys.sorted() {
             let gold = golden.cases[key]!
-            let kind = try XCTUnwrap(BatteryKind(rawValue: gold.kind))
             let events = try gold.events.map {
                 ReplacementEvent(at: try date($0.at),
                                  kind: try XCTUnwrap(EventKind(rawValue: $0.type)))
             }
-            let device = Device(name: gold.name, kind: kind, events: events)
+            let device = Device(name: gold.name, nominalLifeHours: gold.nominalLifeHours, events: events)
             XCTAssertEqual(
                 moment(try XCTUnwrap(device.installedAt)),
                 String(gold.installedAt.prefix(16)),

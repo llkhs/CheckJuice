@@ -78,10 +78,9 @@ final class AppModel {
 
     // MARK: - 变更
 
-    func add(name: String, kind: BatteryKind, installedAt: Date, notifyLeadHours: Double) {
-        devices.append(
-            .newlyAdded(name: name, kind: kind, at: installedAt, notifyLeadHours: notifyLeadHours)
-        )
+    /// 新建一台设备。设备由表单自己构造好（含事件链），这里只负责落库 + 刷新快照。
+    func add(_ device: Device) {
+        devices.append(device)
         commit()
     }
 

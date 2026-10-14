@@ -1,10 +1,12 @@
 import Foundation
 
-/// 来自「同型号设备」历史的先验，log 尺度。
+/// 来自「**同款设备**」历史的先验，log 尺度。
 ///
 /// 用途：你有 3 个同款温湿度计，其中 2 个已经换过 5 次电池。
 /// 新买的第 3 个不必从零开始猜——直接借它们的后验当先验，`tau` 收紧到 0.25 左右，
 /// 冷启动的窗口立刻从 ±50% 收到 ±25%。这是这个模型最实用的一招。
+///
+/// 说明：目前界面还没有入口去填它，是留给核心库的能力。
 public struct ReferencePrior: Codable, Hashable, Sendable {
     /// log 尺度上的中位寿命（单位：小时）。
     ///
@@ -50,19 +52,27 @@ public struct ReplacementEvent: Codable, Hashable, Sendable {
 }
 
 /// 一台被盯着的设备。
+///
+/// 用户创建时只填 `name` 和 `nominalLifeHours`（「大概能用多久」）。
+/// **没有电池型号这个字段** —— 型号根本不决定寿命：同一颗 CR2032 在高功耗传感器里
+/// 撑几天，在电子秤上撑几年；让用户先做一道选择题纯属添乱。
+/// 之后每换一次电池补一个 `ReplacementEvent`，样本越多先验被压得越扁。
 public struct Device: Codable, Identifiable, Hashable, Sendable {
     public var id: UUID
     public var name: String
-    public var kind: BatteryKind
+
+    /// 用户填的「大概能用多久」（**小时**）= 模型唯一的冷启动先验。
+    ///
+    /// 建库时用 `log(nominalLifeHours) ± tauUser` 当先验；一旦攒够真实寿命样本，
+    /// 共轭更新会把先验压扁，这个估计值的权重自然衰减。
+    public var nominalLifeHours: Double
+
     public var events: [ReplacementEvent]
 
     /// 提前多少**小时**提示备货（同时决定 🟡 该备货 的判定阈值）。
     public var notifyLeadHours: Double
 
-    /// 用户手填的预期寿命（**小时**），覆盖 `kind` 的典型值。
-    public var nominalLifeHours: Double?
-
-    /// 借用同型号设备的历史当先验。
+    /// 借用同款设备的历史当先验（界面上暂无入口）。
     public var referencePrior: ReferencePrior?
 
     /// 默认提前量：336 小时 = 14 天。留出快递 / 出门采购的时间。
@@ -71,18 +81,16 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
     public init(
         id: UUID = UUID(),
         name: String,
-        kind: BatteryKind,
+        nominalLifeHours: Double,
         events: [ReplacementEvent] = [],
         notifyLeadHours: Double = Device.defaultNotifyLeadHours,
-        nominalLifeHours: Double? = nil,
         referencePrior: ReferencePrior? = nil
     ) {
         self.id = id
         self.name = name
-        self.kind = kind
+        self.nominalLifeHours = nominalLifeHours
         self.events = events
         self.notifyLeadHours = notifyLeadHours
-        self.nominalLifeHours = nominalLifeHours
         self.referencePrior = referencePrior
     }
 
@@ -102,13 +110,13 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
     /// 便捷构造：`moment` 这一刻刚装上一颗新电池。
     public static func newlyAdded(
         name: String,
-        kind: BatteryKind,
+        nominalLifeHours: Double,
         at moment: Date,
         notifyLeadHours: Double = Device.defaultNotifyLeadHours
     ) -> Device {
         Device(
             name: name,
-            kind: kind,
+            nominalLifeHours: nominalLifeHours,
             events: [ReplacementEvent(at: moment, kind: .initial)],
             notifyLeadHours: notifyLeadHours
         )

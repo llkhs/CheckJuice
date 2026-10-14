@@ -96,10 +96,8 @@ public struct LifetimeModel {
         if let reference = device.referencePrior {
             return (reference.logMedian, reference.tau)
         }
-        if let life = device.nominalLifeHours, life > 0 {
-            return (log(life), config.tauUser)
-        }
-        return (log(device.kind.typicalLifeHours), config.tauDefault)
+        // 手改 JSON 可能写出 0 / 负数，log 会变 -inf 污染整条算术 → 设 1 小时下限
+        return (log(max(device.nominalLifeHours, 1.0)), config.tauUser)
     }
 
     // MARK: - 观测提取

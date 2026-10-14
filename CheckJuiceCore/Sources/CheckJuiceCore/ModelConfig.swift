@@ -2,15 +2,15 @@ import Foundation
 
 /// 模型超参数。集中一处，便于调参与测试。
 public struct ModelConfig: Sendable, Equatable {
-    /// 冷启动先验的相对不确定度（±50%）。
-    public var tauDefault: Double
-    /// 用户手填寿命时的先验不确定度。
+    /// 冷启动先验的相对不确定度。
+    ///
+    /// 模型唯一的先验来源是用户填的「大概能用多久」，而那本质是个人口级猜测：
+    /// 刚创建设备时一次实测都没有。所以取 ±50%，诚实一点。
+    /// 拿到真样本后 `sigmaPost` 会被数据压下去，这个宽度只在头几轮起作用。
     public var tauUser: Double
-    /// 借用同型号设备历史时的先验不确定度。
-    public var tauReference: Double
     /// 方差下限。
     ///
-    /// 物理依据：同一台设备连换两次同型号电池，寿命天然就有 15%~20% 的差异。
+    /// 物理依据：同一台设备连换两次同款电池，寿命天然就有 15%~20% 的差异。
     /// 样本再多也不该给出「±3 小时」这种骗人的精度。
     public var sigmaMin: Double
     /// 样本不足（< `minSamplesForVariance`）时，样本方差不可识别，用此值兜底。
@@ -25,9 +25,7 @@ public struct ModelConfig: Sendable, Equatable {
     public var minSamplesForVariance: Int
 
     public init(
-        tauDefault: Double = 0.5,
-        tauUser: Double = 0.35,
-        tauReference: Double = 0.25,
+        tauUser: Double = 0.5,
         sigmaMin: Double = 0.15,
         sigmaUnidentified: Double = 0.30,
         sigmaPredictionCap: Double = 0.70,
@@ -35,9 +33,7 @@ public struct ModelConfig: Sendable, Equatable {
         z10: Double = 1.2815515655446004,
         minSamplesForVariance: Int = 3
     ) {
-        self.tauDefault = tauDefault
         self.tauUser = tauUser
-        self.tauReference = tauReference
         self.sigmaMin = sigmaMin
         self.sigmaUnidentified = sigmaUnidentified
         self.sigmaPredictionCap = sigmaPredictionCap

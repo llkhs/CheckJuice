@@ -18,7 +18,7 @@ import random
 from datetime import datetime, timedelta
 
 from lifetime_model import (
-    BATTERY_KINDS, CENSORED_TYPES, CONFIDENCE_LABEL, DEFAULT_CONFIG,
+    CENSORED_TYPES, CONFIDENCE_LABEL, DEFAULT_CONFIG,
     EXHAUSTED, FAULTY, INITIAL, PREVENTIVE, URGENCY_LABEL,
     Device, ReplacementEvent, fit, hours_between, predict,
 )
@@ -27,7 +27,7 @@ D = 24.0                                # 一天多少小时，仅为让场景�
 TODAY = datetime(2026, 10, 14, 12, 0)
 
 
-def make_device(name, kind, intervals_h, hours_since_last, types=None, **kw):
+def make_device(name, nominal_life_hours, intervals_h, hours_since_last, types=None, **kw):
     """按「相邻更换间隔（小时）」构造设备；最后一个事件 = 当前电池的起算点。"""
     total = sum(intervals_h) + hours_since_last
     origin = TODAY - timedelta(hours=total)
@@ -36,23 +36,23 @@ def make_device(name, kind, intervals_h, hours_since_last, types=None, **kw):
     for i, iv in enumerate(intervals_h):
         cur += timedelta(hours=iv)
         events.append(ReplacementEvent(cur, (types or [EXHAUSTED] * len(intervals_h))[i]))
-    return Device(name=name, kind=kind, events=events, **kw)
+    return Device(name=name, nominal_life_hours=nominal_life_hours, events=events, **kw)
 
 
 # ───────────────────────────────────────────────────────────── A. 场景演示
 
 SCENARIOS = [
-    ("① 冷启动 · 刚添加", "cr2032", [], 0, None, 14*D),
-    ("② 首次更换 · 1 个样本", "cr2032", [300*D], 60*D, None, 14*D),
-    ("③ 两次更换 · 2 个样本", "cr2032", [300*D, 280*D], 90*D, None, 14*D),
-    ("④ 多次更换 · 3 个样本", "aa_alkaline", [300*D, 280*D, 320*D], 100*D, None, 14*D),
-    ("⑤ 含一颗坏电池", "cr2032", [300*D, 290*D, 310*D, 60*D, 295*D, 285*D], 120*D,
+    ("① 冷启动 · 刚添加", 8760.0, [], 0, None, 14*D),
+    ("② 首次更换 · 1 个样本", 8760.0, [300*D], 60*D, None, 14*D),
+    ("③ 两次更换 · 2 个样本", 8760.0, [300*D, 280*D], 90*D, None, 14*D),
+    ("④ 多次更换 · 3 个样本", 4320.0, [300*D, 280*D, 320*D], 100*D, None, 14*D),
+    ("⑤ 含一颗坏电池", 8760.0, [300*D, 290*D, 310*D, 60*D, 295*D, 285*D], 120*D,
      [EXHAUSTED, EXHAUSTED, EXHAUSTED, FAULTY, EXHAUSTED, EXHAUSTED], 14*D),
-    ("⑥ 混入预防性更换", "cr2032", [300*D, 120*D, 290*D, 310*D], 150*D,
+    ("⑥ 混入预防性更换", 8760.0, [300*D, 120*D, 290*D, 310*D], 150*D,
      [EXHAUSTED, PREVENTIVE, EXHAUSTED, EXHAUSTED], 14*D),
-    ("⑦ 老化趋势（寿命递减）", "cr2032", [400*D, 370*D, 330*D, 300*D, 270*D], 200*D,
+    ("⑦ 老化趋势（寿命递减）", 8760.0, [400*D, 370*D, 330*D, 300*D, 270*D], 200*D,
      None, 30*D),
-    ("⑧ 耗尽中未更换", "cr2032", [300*D, 290*D], 330*D, None, 14*D),
+    ("⑧ 耗尽中未更换", 8760.0, [300*D, 290*D], 330*D, None, 14*D),
 ]
 
 
@@ -66,8 +66,8 @@ def run_scenarios():
     print("-" * 118)
 
     rows = []
-    for name, kind, intervals, since, types, lead in SCENARIOS:
-        dev = make_device(name, kind, intervals, since, types, notify_lead_hours=lead)
+    for name, nominal_life_hours, intervals, since, types, lead in SCENARIOS:
+        dev = make_device(name, nominal_life_hours, intervals, since, types, notify_lead_hours=lead)
         p = predict(dev, TODAY)
         conf = p.confidence
         print(f"{name:<24}{p.posterior.n_observed:>3}{p.posterior.n_eff:>7.2f}"
@@ -137,7 +137,7 @@ def monte_carlo(trials=4000, seed=42):
         missed = 0
         for _ in range(trials):
             obs = [math.exp(random.gauss(mu_true, SIGMA_TRUE)) for _ in range(n)]
-            dev = make_device(f"t{n}", "cr2032", obs, 0)
+            dev = make_device(f"t{n}", 8760.0, obs, 0)
             p = predict(dev, TODAY)
             med_preds.append(p.median_hours)
             p10_preds.append(p.p10_hours)
@@ -154,7 +154,7 @@ def monte_carlo(trials=4000, seed=42):
         w = sum(widths) / trials
         sp = sum(sigmas) / trials
         sw = sum(swithins) / trials
-        neff = fit(make_device("x", "cr2032", [300.0 * D] * n, 0), cfg).n_eff
+        neff = fit(make_device("x", 8760.0, [300.0 * D] * n, 0), cfg).n_eff
         bias = (med - L_TRUE_H) / L_TRUE_H * 100
         miss = missed / trials * 100
         print(f"{n:>4}{neff:>9.2f}{med:>11.1f}{bias:>8.1f}%{p10:>11.1f}"

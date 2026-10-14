@@ -28,12 +28,11 @@ final class BehaviourTests: XCTestCase {
     /// 按「相邻更换间隔」构造设备，`intervals`/`since` 单位是**小时**。
     private func makeDevice(
         name: String = "测试设备",
-        kind: BatteryKind = .cr2032,
+        nominalLifeHours: Double = 8760,
         intervals: [Double],
         since: Double,
         kinds: [EventKind]? = nil,
         notifyLeadHours: Double = 336,
-        nominalLifeHours: Double? = nil,
         referencePrior: ReferencePrior? = nil
     ) -> Device {
         let total = intervals.reduce(0, +) + since
@@ -45,9 +44,8 @@ final class BehaviourTests: XCTestCase {
             events.append(ReplacementEvent(at: cursor, kind: resolvedKinds[index]))
         }
         return Device(
-            name: name, kind: kind, events: events,
+            name: name, nominalLifeHours: nominalLifeHours, events: events,
             notifyLeadHours: notifyLeadHours,
-            nominalLifeHours: nominalLifeHours,
             referencePrior: referencePrior
         )
     }
@@ -94,7 +92,7 @@ final class BehaviourTests: XCTestCase {
     // MARK: - 空设备
 
     func testDeviceWithoutEventsHasNoPrediction() {
-        let empty = Device(name: "空设备", kind: .cr2032, events: [])
+        let empty = Device(name: "空设备", nominalLifeHours: 8760, events: [])
         XCTAssertNil(model.predict(empty, now: today))
     }
 
@@ -174,7 +172,7 @@ final class BehaviourTests: XCTestCase {
 
     /// 刚添加、零样本时，必须承认自己不知道，而不是给一个看起来很准的数字。
     func testColdStartIsHonestlyUncertain() throws {
-        let device = Device.newlyAdded(name: "新设备", kind: .cr2032, at: today)
+        let device = Device.newlyAdded(name: "新设备", nominalLifeHours: 8760, at: today)
         let prediction = try mustPredict(device)
 
         XCTAssertEqual(prediction.posterior.observedCount, 0)

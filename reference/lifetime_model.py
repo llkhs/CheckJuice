@@ -39,22 +39,6 @@ from typing import Optional, Sequence
 
 # ════════════════════════════════════════════════════════════ 1. 常量与枚举
 
-#: 电池种类 → (显示名, 冷启动先验寿命小时数)
-#: ⚠️ 这些只是「典型值」，真实寿命**主要由设备功耗决定**，所以先验置信度故意给得很低。
-#: 括号里是换算前的天数，纯粹为了方便人读。
-BATTERY_KINDS: dict[str, tuple[str, float]] = {
-    "cr2032":       ("CR2032 纽扣锂电",   8760.0),   # 365 天
-    "cr2450":       ("CR2450 纽扣锂电",  17520.0),   # 730 天
-    "cr123a":       ("CR123A 锂电",      21600.0),   # 900 天
-    "aa_alkaline":  ("AA 碱性",           4320.0),   # 180 天
-    "aa_lithium":   ("AA 锂铁",          12960.0),   # 540 天
-    "aaa_alkaline": ("AAA 碱性",          2880.0),   # 120 天
-    "9v":           ("9V 碱性",           8760.0),   # 365 天
-    "lr44":         ("LR44 碱性纽扣",     6480.0),   # 270 天
-    "builtin_li":   ("内置锂电",         26280.0),   # 1095 天
-    "other":        ("其他 / 未知",       8760.0),   # 365 天
-}
-
 # 事件类型：描述「刚刚耗尽的那颗电池是被怎么处理掉的」
 INITIAL    = "initial"     # 首次安装，永不作为间隔终点
 EXHAUSTED  = "exhausted"   # 自然耗尽 → 有效样本，计入寿命统计
@@ -78,9 +62,9 @@ URGENCY_OVERDUE, URGENCY_RISK, URGENCY_STOCKUP, URGENCY_NORMAL = (
 class ModelConfig:
     """模型超参数。集中在一处，方便调参与写测试。"""
 
-    tau_default: float = 0.5   # 冷启动先验相对不确定度（±50%）
-    tau_user: float = 0.35     # 用户手填寿命时的先验不确定度
-    tau_ref: float = 0.25      # 借用同型号设备历史当先验时的不确定度
+    tau_user: float = 0.5      # 用户手填「大概能用多久」的先验不确定度（±50%）——
+                               # 那本质还是个人口级猜测：刚创建时一次实测都没有。
+                               # 拿到真样本后 σ_post 会被数据压下去，这个宽度只在头几轮起作用。
     sigma_min: float = 0.15    # 方差下限：同设备换同型号电池，寿命天然差 15%
     sigma_unidentified: float = 0.30   # 样本 <3 时无法估计方差，用此值兜底
     sigma_pred_cap: float = 0.70       # 预测分布宽度上限，防止冷启动出现荒谬窗口
@@ -124,13 +108,18 @@ class ReplacementEvent:
 
 @dataclass
 class Device:
-    """一台被盯着的设备。"""
+    """一台被盯着的设备。
+
+    用户创建时只填 ``name`` 和 ``nominal_life_hours``（「大概能用多久」）——
+    没有电池型号选择器，因为型号根本不决定寿命（同一颗 CR2032 在高功耗传感器里
+    撑几天，在电子秤上撑几年）。之后每换一次电池补一个事件，
+    样本越多先验被压得越扁，预测越准。
+    """
     name: str
-    kind: str
+    nominal_life_hours: float                        # 用户手填的预期寿命（小时）= 冷启动先验
     events: list[ReplacementEvent] = field(default_factory=list)
     notify_lead_hours: float = DEFAULT_NOTIFY_LEAD_HOURS
-    nominal_life_hours: Optional[float] = None   # 用户手填 → 覆盖电池种类的先验
-    ref_prior: Optional[tuple[float, float]] = None  # (m, tau) 来自同型号设备
+    ref_prior: Optional[tuple[float, float]] = None  # (m, tau) 借用同类设备的历史
 
     @property
     def installed_at(self) -> datetime:
@@ -138,15 +127,12 @@ class Device:
         return sorted(self.events, key=lambda e: e.at)[-1].at
 
     def prior(self, cfg: ModelConfig = DEFAULT_CONFIG) -> tuple[float, float]:
-        """返回 (m0, tau0)。优先级：参照设备 > 用户手填 > 电池种类典型值。"""
+        """返回 (m0, tau0)。参照先验（若显式给了）压过用户手填的估计值。"""
         if self.ref_prior is not None:
-            # 参照先验自带不确定度，直接采用，不要套 cfg.tau_ref
+            # 参照先验自带不确定度，直接采用，不要套 cfg.tau_user
             return self.ref_prior[0], self.ref_prior[1]
-        life = self.nominal_life_hours
-        if life is not None and life > 0:
-            return math.log(life), cfg.tau_user
-        _, typical = BATTERY_KINDS.get(self.kind, BATTERY_KINDS["other"])
-        return math.log(typical), cfg.tau_default
+        # 手改 JSON 可能写出 0 / 负数，log 会变 -inf 污染整条算术 → 设 1 小时下限
+        return math.log(max(self.nominal_life_hours, 1.0)), cfg.tau_user
 
 
 @dataclass(frozen=True)

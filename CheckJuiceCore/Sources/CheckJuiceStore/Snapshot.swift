@@ -8,7 +8,6 @@ import CheckJuiceCore
 public struct DeviceSnapshot: Codable, Hashable, Identifiable, Sendable {
     public var id: UUID
     public var name: String
-    public var batteryDisplayName: String
     public var urgency: Urgency
     public var remainingHours: Double
     public var p10RemainingHours: Double
@@ -16,20 +15,18 @@ public struct DeviceSnapshot: Codable, Hashable, Identifiable, Sendable {
     public var confidence: Confidence
     /// 直接上屏的短文案，由 `Prediction` 统一生成，避免 App 与 Widget 各写一套。
     ///
-    /// 这是**预渲染好的字符串**：Widget 扩展进程不做任何格式化、不跑任何算法，
+    /// 这是**预渲染好的主文案（P10）**：Widget 扩展进程不做任何格式化、不跑任何算法，
     /// 只负责把这份快照画出来。显示格式随用户设置变化，但变化发生在主 App 里。
-    /// 预渲染好的主文案（P10）。Widget 只显示这一行 —— 它位置太小放不下两行，
-    /// 中位小字是 App 列表独有的（且受设置页开关控制）。
+    /// 小组件位置太小只放这一行 —— 中位小字是 App 列表独有的（且受设置页开关控制）。
     public var headline: String
 
     public init(
-        id: UUID, name: String, batteryDisplayName: String, urgency: Urgency,
+        id: UUID, name: String, urgency: Urgency,
         remainingHours: Double, p10RemainingHours: Double, p50ExhaustAt: Date,
         confidence: Confidence, headline: String
     ) {
         self.id = id
         self.name = name
-        self.batteryDisplayName = batteryDisplayName
         self.urgency = urgency
         self.remainingHours = remainingHours
         self.p10RemainingHours = p10RemainingHours
@@ -52,7 +49,6 @@ public struct DeviceSnapshot: Codable, Hashable, Identifiable, Sendable {
         self.init(
             id: device.id,
             name: device.name,
-            batteryDisplayName: device.kind.displayName,
             urgency: prediction.urgency,
             remainingHours: prediction.remainingHours,
             p10RemainingHours: prediction.p10RemainingHours,

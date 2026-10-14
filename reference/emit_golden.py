@@ -25,7 +25,7 @@ D = 24.0                              # 一天多少小时，仅为让下面的�
 TODAY = datetime(2026, 10, 14, 12, 0)  # 固定的「现在」
 
 
-def dev(name, kind, intervals_h, since_h, types=None, **kw):
+def dev(name, nominal_life_hours, intervals_h, since_h, types=None, **kw):
     """intervals_h = 相邻更换间隔（小时）；since_h = 最后一次更换距 TODAY 的小时数。"""
     total = sum(intervals_h) + since_h
     origin = TODAY - timedelta(hours=total)
@@ -35,35 +35,34 @@ def dev(name, kind, intervals_h, since_h, types=None, **kw):
     for iv, t in zip(intervals_h, ts):
         cur += timedelta(hours=iv)
         events.append(ReplacementEvent(cur, t))
-    return Device(name=name, kind=kind, events=events, **kw)
+    return Device(name=name, nominal_life_hours=nominal_life_hours, events=events, **kw)
 
 
 CASES = {
-    "coldStart":      dev("冷启动", "cr2032", [], 0),
-    "oneSample":      dev("单样本", "cr2032", [300*D], 60*D),
-    "twoSamples":     dev("两样本", "cr2032", [300*D, 280*D], 90*D),
-    "threeSamples":   dev("三样本", "aa_alkaline", [300*D, 280*D, 320*D], 100*D),
-    "faultyOutlier":  dev("坏电池", "cr2032", [300*D, 290*D, 310*D, 60*D, 295*D, 285*D], 120*D,
+    "coldStart":      dev("冷启动", 8760.0, [], 0),
+    "oneSample":      dev("单样本", 8760.0, [300*D], 60*D),
+    "twoSamples":     dev("两样本", 8760.0, [300*D, 280*D], 90*D),
+    "threeSamples":   dev("三样本", 4320.0, [300*D, 280*D, 320*D], 100*D),
+    "faultyOutlier":  dev("坏电池", 8760.0, [300*D, 290*D, 310*D, 60*D, 295*D, 285*D], 120*D,
                           [EXHAUSTED, EXHAUSTED, EXHAUSTED, FAULTY, EXHAUSTED, EXHAUSTED]),
-    "preventive":     dev("预防性更换", "cr2032", [300*D, 120*D, 290*D, 310*D], 150*D,
+    "preventive":     dev("预防性更换", 8760.0, [300*D, 120*D, 290*D, 310*D], 150*D,
                           [EXHAUSTED, PREVENTIVE, EXHAUSTED, EXHAUSTED]),
-    "agingTrend":     dev("老化趋势", "cr2032", [400*D, 370*D, 330*D, 300*D, 270*D], 200*D),
-    "overdue":        dev("耗尽中", "cr2032", [300*D, 290*D], 330*D),
-    "lead30d":        dev("提前30天提醒", "cr2450", [300*D, 290*D, 310*D], 200*D,
+    "agingTrend":     dev("老化趋势", 8760.0, [400*D, 370*D, 330*D, 300*D, 270*D], 200*D),
+    "overdue":        dev("耗尽中", 8760.0, [300*D, 290*D], 330*D),
+    "lead30d":        dev("提前30天提醒", 17520.0, [300*D, 290*D, 310*D], 200*D,
                           notify_lead_hours=30*D),
-    "customLife":     dev("手填寿命", "other", [300*D, 290*D], 100*D,
-                          nominal_life_hours=180*D),
+    "customLife":     dev("手填寿命", 8760.0, [300*D, 290*D], 100*D),
     # ⚠️ 陷阱：ref_prior 的 m 是 **log 尺度**的中位数。
     #    换单位时它要 **+log(24)**，不是 ×24 —— 对数尺度上是加法。
     #    （真实代码里这个值来自另一台设备的 posterior.m，那台也换成小时后自动一致；
     #      这里的硬编码值必须手写对，否则黄金数值会把 Swift 也带进沟里。）
-    "refPrior":       dev("引用同型号", "cr2032", [300*D, 290*D], 100*D,
+    "refPrior":       dev("引用同型号", 8760.0, [300*D, 290*D], 100*D,
                           ref_prior=(math.log(300*D), 0.25)),
-    "tinyIntervals":  dev("极短间隔", "aaa_alkaline", [5*D, 6*D, 4*D], 1*D),   # 边界：小数值
-    "longIntervals":  dev("超长间隔", "builtin_li", [1200*D, 1100*D, 1300*D], 400*D),
+    "tinyIntervals":  dev("极短间隔", 2880.0, [5*D, 6*D, 4*D], 1*D),   # 边界：小数值
+    "longIntervals":  dev("超长间隔", 26280.0, [1200*D, 1100*D, 1300*D], 400*D),
     # 紧急度分级覆盖：确认「该备货」看的是**距风险窗口**的距离，而不是距中位时刻
-    "stockUpWindow":  dev("该备货", "cr2032", [300*D, 290*D], 170*D, notify_lead_hours=30*D),
-    "riskWindow":     dev("已入风险窗口", "cr2032", [300*D, 290*D], 200*D),
+    "stockUpWindow":  dev("该备货", 8760.0, [300*D, 290*D], 170*D, notify_lead_hours=30*D),
+    "riskWindow":     dev("已入风险窗口", 8760.0, [300*D, 290*D], 200*D),
 }
 
 
@@ -73,7 +72,7 @@ def main():
         p = predict(d, TODAY, DEFAULT_CONFIG)
         out["cases"][key] = {
             "name": d.name,
-            "kind": d.kind,
+            "nominalLifeHours": d.nominal_life_hours,
             "installedAt": d.installed_at.isoformat(),
             "notifyLeadHours": d.notify_lead_hours,
             "nominalLifeHours": d.nominal_life_hours,

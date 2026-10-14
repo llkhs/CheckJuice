@@ -72,14 +72,7 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showingAdd) {
-                AddDeviceView { name, kind, moment, leadHours in
-                    model.add(
-                        name: name,
-                        kind: kind,
-                        installedAt: moment,
-                        notifyLeadHours: leadHours
-                    )
-                }
+                AddDeviceView { device in model.add(device) }
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsView(
@@ -133,43 +126,100 @@ struct DeviceRow: View {
     }
 }
 
+/// 「大概能用多久」的输入单位。
+///
+/// 让人填「1095 小时」是耍流氓，填「1095 天」也够呛。给天和月两个量级就够——
+/// 一个月按 30 天算，跟显示层（`Prediction.adaptiveHours`）用同一个常数。
+enum LifeUnit: String, CaseIterable, Identifiable {
+    case days = "天"
+    case months = "个月"
+    var id: String { rawValue }
+    var hours: Double { self == .days ? 24 : 720 }
+}
+
 struct AddDeviceView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var name = ""
-    @State private var kind: BatteryKind = .cr2032
+
+    /// 用户填的「大概能用多久」—— 模型唯一的冷启动先验。
+    @State private var lifeAmount = 30.0
+    @State private var lifeUnit: LifeUnit = .days
 
     /// 装上这颗电池的**时刻**，不是日期。默认「现在」—— 用户通常是刚换完才来记一笔。
     /// 精确到分钟是有意义的：一块撑 4 天的纽扣电池，早上 8 点装和晚上 8 点装上，
     /// 差出来的 12 小时是它总寿命的八分之一。
     @State private var installedAt = Date()
 
+    /// 可留空：这一颗**也已经换掉了**的时刻。
+    /// 填上它，模型立刻拿到一个真实寿命区间，而不是只靠你拍脑袋的估计值。
+    @State private var hasNextReplacement = false
+    @State private var nextReplacementAt = Date()
+
     /// 提前多久提醒备货。UI 用「天」（人脑里想的是「提前两周」），提交时换算成小时。
     @State private var notifyLeadDays = 14
 
-    let onAdd: (String, BatteryKind, Date, Double) -> Void
+    let onAdd: (Device) -> Void
+
+    private var nominalLifeHours: Double { lifeAmount * lifeUnit.hours }
+
+    private var canSubmit: Bool { lifeAmount > 0 }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("这是什么") {
                     TextField("名称，例如「大门门锁」", text: $name)
-                    Picker("电池类型", selection: $kind) {
-                        ForEach(BatteryKind.allCases, id: \.self) { kind in
-                            Text(kind.displayName).tag(kind)
+                }
+
+                Section("电池能撑多久") {
+                    HStack {
+                        TextField("大概", value: $lifeAmount, format: .number)
+                            .keyboardType(.decimalPad)
+                        Picker("单位", selection: $lifeUnit) {
+                            ForEach(LifeUnit.allCases) { unit in
+                                Text(unit.rawValue).tag(unit)
+                            }
                         }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .frame(width: 140)
+                    }
+                    if nominalLifeHours > 0 {
+                        Text("≈ \(Int(nominalLifeHours.rounded())) 小时")
+                            .font(.footnote)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
                     }
                 }
+
                 Section("计时起点") {
                     DatePicker(
                         "本次装上电池的时刻",
                         selection: $installedAt,
                         displayedComponents: [.date, .hourAndMinute]
                     )
+                }
+
+                Section("下一次更换（可留空）") {
+                    Toggle("这一颗也已经换掉了", isOn: $hasNextReplacement)
+                    if hasNextReplacement {
+                        DatePicker(
+                            "换上的时刻",
+                            selection: $nextReplacementAt,
+                            in: installedAt...,
+                            displayedComponents: [.date, .hourAndMinute]
+                        )
+                    }
+                }
+
+                Section("提醒") {
                     Stepper("提前 \(notifyLeadDays) 天提醒", value: $notifyLeadDays, in: 1...180)
                 }
+
                 Section {
-                    Text("第 1 颗电池没有历史数据，预测基于「\(kind.displayName)」的典型寿命，误差较大。等它耗尽、你记下一次更换之后，预测会明显变准。")
+                    Text("第 1 颗电池没有实测数据，预测只能靠你填的「大概寿命」撑场面，"
+                         + "最坏情况可能只有你估值的四成。等它耗尽、你记下一次更换之后，预测会明显变准。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -182,16 +232,26 @@ struct AddDeviceView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("添加") {
-                        onAdd(
-                            name.isEmpty ? "未命名" : name,
-                            kind,
-                            installedAt,
-                            Double(notifyLeadDays) * 24.0
-                        )
+                        onAdd(buildDevice())
                         dismiss()
                     }
+                    .disabled(!canSubmit)
                 }
             }
         }
+    }
+
+    private func buildDevice() -> Device {
+        var events = [ReplacementEvent(at: installedAt, kind: .initial)]
+        // 留空 = 这一颗还在用。填了才算一个已结束的周期。
+        if hasNextReplacement, nextReplacementAt > installedAt {
+            events.append(ReplacementEvent(at: nextReplacementAt, kind: .exhausted))
+        }
+        return Device(
+            name: name.isEmpty ? "未命名" : name,
+            nominalLifeHours: nominalLifeHours,
+            events: events,
+            notifyLeadHours: Double(notifyLeadDays) * 24.0
+        )
     }
 }
