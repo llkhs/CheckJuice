@@ -53,14 +53,16 @@ final class GoldenValueTests: XCTestCase {
     // MARK: - 日期口径
 
     /// 黄金文件里的时间戳是 ISO 形式（`2026-10-14T12:00:00`），秒精度。
-    private static let isoFormatter = Self.makeFormatter("yyyy-MM-dd'T'HH:mm:ss")
+    private static let isoFormatter =
+        GoldenValueTests.makeFormatter("yyyy-MM-dd'T'HH:mm:ss")
 
     /// **分钟**精度，用来比对导出时刻。
     ///
     /// 为什么不比到微秒：Swift 的 `Date` 是 Double 秒，Python 的 `datetime` 是微秒，
     /// 两者往返必然在末位有差异 —— 拿微秒比就是自找误报。而本 App 的最小刻度是
     /// **1 小时**，分钟精度已经比有效分辨率细 60 倍。
-    private static let minuteFormatter = Self.makeFormatter("yyyy-MM-dd'T'HH:mm")
+    private static let minuteFormatter =
+        GoldenValueTests.makeFormatter("yyyy-MM-dd'T'HH:mm")
 
     private static func makeFormatter(_ format: String) -> DateFormatter {
         let formatter = DateFormatter()
@@ -128,9 +130,9 @@ final class GoldenValueTests: XCTestCase {
             }
             let device = Device(
                 name: gold.name,
+                nominalLifeHours: gold.nominalLifeHours,
                 events: events,
                 notifyLeadHours: gold.notifyLeadHours,
-                nominalLifeHours: gold.nominalLifeHours,
                 referencePrior: gold.referencePrior
             )
 

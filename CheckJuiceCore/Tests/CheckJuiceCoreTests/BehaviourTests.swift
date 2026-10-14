@@ -295,7 +295,7 @@ final class BehaviourTests: XCTestCase {
                                  notifyLeadHours: 720)
         let normal = makeDevice(name: "正常", intervals: [h(300), h(290)], since: h(90))
 
-        let sorted = model.predictions(for: [normal, overdue, stockUp], today: today)
+        let sorted = model.predictions(for: [normal, overdue, stockUp], now: today)
 
         XCTAssertEqual(sorted.map { $0.device.name }, ["逾期", "备货", "正常"])
         XCTAssertEqual(sorted.map { $0.prediction.urgency }, [.overdue, .stockUp, .normal])
