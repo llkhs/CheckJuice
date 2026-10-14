@@ -473,7 +473,7 @@ GitHub Actions → archive → exportArchive（p12 + .mobileprovision 手动签�
 小组件正在读的快照内容 / 两个 bundle 各自描述文件里声明的 App Group 清单。
 失败要响，不要静默。
 
-### 6.6 ⭐ 正解：不硬编码标识符，按 entitlements 自动解析
+### 6.6 ⭐ 正解：不硬编码标识符，按描述文件自动解析
 
 **我在 6.5 里写了一句「这条路本身是死的」——被证伪了，留在这里当反面教材。**
 
@@ -495,20 +495,38 @@ let task = SecTaskCreateFromSelf(nil)
 SecTaskCopyValueForEntitlement(task, "com.apple.security.application-groups" as CFString, nil)
 ```
 
-`SecTaskCopyValueForEntitlement` 返回的正是 `containerURL` 要校验的那份 entitlements。
-不用读文件、不受描述文件被删的影响，**App 和小组件用的是同一个 API**。
+**踩了个坑，记下来：`SecTask` 系列是 macOS-only。**
+
+我第一版就是上面那么写的，理由很硬：「问本进程实际生效的 entitlements，那正是
+`containerURL` 校验的东西」。CI 直接给了我一巴掌：
+
+```
+error: cannot find 'SecTaskCreateFromSelf' in scope
+```
+
+**iOS SDK 里没有 `SecTask.h`**（`SecCode` 那套同理，也是 macOS-only）。
+凭印象用 API、还指望 CI 兜底 —— 那 CI 就会用一整天的时间成本教你做人。
+
+**改用描述文件解析**，反而更简单：只认**主 App 那一份**
+`<App>.app/embedded.mobileprovision` 里的 `Entitlements.com.apple.security.application-groups`。
+
+```swift
+AppGroup.candidates          // [项目声明的] + 描述文件授予的（字典序）
+AppGroup.resolvedIdentifier  // 第一个 containerURL 不为 nil 的（只算一次）
+```
 
 #### 两边怎么保证选中同一个组
 
-**顺序必须是确定性的**，否则 App 挑 A、小组件挑 B，又是一个「小组件空着」的静默失败：
+**来源收敛成一个文件**，这是关键。小组件虽然跑在 `<App>.app/PlugIns/<Appex>.appex` 里，
+但能往上读到主 App bundle —— 两个进程读的是**同一个文件**，候选列表逐项相同，
+选中结果必然相同。
 
-```
-候选 = [项目声明的] + [本进程 entitlements，字典序] + [描述文件里的，字典序]
-选中 = 第一个 containerURL 不为 nil 的
-```
+> 反面：appex 自己那份描述文件**经常被签名工具直接删掉**（真机诊断里就是「读不出」），
+> 拿它当来源等于把命运交给签名工具的心情。
 
-描述文件那一路是兜底（万一 entitlements 读不出来），而且**两边都能读主 App 的描述文件**
-（小组件跑在 `<App>.app/PlugIns/<Appex>` 里），所以两侧的清单天然一致。
+候选顺序 = `[项目声明的] + [主 App 描述文件授予的，字典序]`，取第一个能拿到容器的。
+但**「授予了」不等于「能拿到」** —— 所以诊断页对每个候选都做三重探测：
+在描述文件里吗 → `containerURL` 不为 nil 吗 → **真能写入再读回吗**。
 
 **这个设计的漂亮之处：不需要任何额外的共享存储**。要共享配置得先有共享容器，
 而「用哪个容器」正是待求的未知数 —— 自举问题被确定性算法绕开了。
