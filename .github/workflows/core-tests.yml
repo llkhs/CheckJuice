@@ -41,6 +41,15 @@ jobs:
           fi
           exit "$status"
 
+      - name: 上报测试摘要（免登录可见）
+        if: always()
+        run: |
+          # 绿 ≠ 真跑过：swift test 在找不到测试时会报 "no tests found" 却仍然 exit 0。
+          # 而原始日志要登录才能看，只有**注解**免登录可读 —— 所以把摘要抛成注解，
+          # 一眼就能分辨「真跑了 N 个用例」还是「空跑了一场」。
+          summary=$(grep -E "Executed [0-9]+ tests?" /tmp/swift-test.log 2>/dev/null | tail -1)
+          echo "::notice::${summary:-日志里没有测试执行摘要 —— 测试可能根本没跑}"
+
       - name: 校验黄金数值与 Python 参考实现一致
         # 这是本项目的核心不变量：Swift 实现必须与 Python 参考实现给出同样的数值。
         # 谁改了算法却忘了同步，这里会直接红。
