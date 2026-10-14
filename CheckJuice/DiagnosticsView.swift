@@ -43,12 +43,12 @@ struct DiagnosticsView: View {
             Text("共享容器")
         } footer: {
             Text("重签名工具会把它自己那套 App Group 写进二进制，项目里声明的那个多半被换掉。"
-                 + "所以这里按「本进程 entitlements 里的组」逐个探测，取第一个真的能拿到容器的。"
+                 + "所以这里按「主 App 描述文件授予的组」逐个探测，取第一个真的能拿到容器的。"
                  + "App 和小组件各自探测，但顺序是确定的，所以两边会选中同一个。")
         }
     }
 
-    /// 逐个候选报三件事：在 entitlements 里吗、能拿到容器吗、**真能写入吗**。
+    /// 逐个候选报三件事：在描述文件里吗、能拿到容器吗、**真能写入吗**。
     /// 能拿到容器 ≠ 能写 —— 少写一个探针，下次又得靠猜。
     private var probeRows: some View {
         ForEach(AppGroup.candidates, id: \.self) { id in
@@ -56,8 +56,8 @@ struct DiagnosticsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(id).font(.caption).monospaced()
                 HStack(spacing: 6) {
-                    badge(probe.inEntitlements ? "已授予" : "未授予",
-                          ok: probe.inEntitlements)
+                    badge(probe.inDeclared ? "已授予" : "未授予",
+                          ok: probe.inDeclared)
                     badge(probe.container != nil ? "有容器" : "无容器",
                           ok: probe.container != nil)
                     badge(probe.writable ? "可写" : "不可写", ok: probe.writable)
@@ -83,14 +83,14 @@ struct DiagnosticsView: View {
     /// 一次探测的结果。
     private struct Probe {
         let id: String
-        let inEntitlements: Bool
+        let inDeclared: Bool
         let container: URL?
         let writable: Bool
         let error: String?
 
         init(id: String) {
             self.id = id
-            self.inEntitlements = AppGroup.entitledGroups.contains(id)
+            self.inDeclared = AppGroup.declaredGroups.contains(id) || id == AppGroup.identifier
             let url = FileManager.default
                 .containerURL(forSecurityApplicationGroupIdentifier: id)
             self.container = url
@@ -204,12 +204,12 @@ struct DiagnosticsView: View {
     private var profileSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 4) {
-                Text("本进程 entitlements（系统真正校验的）").font(.subheadline)
-                Text(AppGroup.entitledGroups.isEmpty
+                Text("描述文件授予的组（主 App 的）").font(.subheadline)
+                Text(AppGroup.declaredGroups.isEmpty
                      ? "空 —— 系统认为这个 App 没有任何 App Group"
-                     : AppGroup.entitledGroups.joined(separator: ", "))
+                     : AppGroup.declaredGroups.joined(separator: ", "))
                     .font(.caption).monospaced()
-                    .foregroundStyle(AppGroup.entitledGroups.isEmpty ? .red : .primary)
+                    .foregroundStyle(AppGroup.declaredGroups.isEmpty ? .red : .primary)
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text("主 App 描述文件").font(.subheadline)
@@ -292,7 +292,7 @@ struct DiagnosticsView: View {
             "Check Juice 诊断",
             "项目声明: \(AppGroup.identifier)",
             "实际生效: \(AppGroup.resolvedIdentifier ?? "无 —— 一个都没拿到容器")",
-            "本进程 entitlements: \(AppGroup.entitledGroups.isEmpty ? "空" : AppGroup.entitledGroups.joined(separator: ", "))",
+            "描述文件授予: \(AppGroup.declaredGroups.isEmpty ? "空" : AppGroup.declaredGroups.joined(separator: ", "))",
             "容器: \(AppGroup.containerURL?.path ?? "拿不到")",
             "内存/磁盘: \(model.devices.count) / \(storedDeviceCount)",
             "快照: \(snapshot.devices.count) 台 @ \(snapshot.generatedAt)",
@@ -302,7 +302,7 @@ struct DiagnosticsView: View {
         for id in AppGroup.candidates {
             let probe = Probe(id: id)
             lines.append("探测 \(id): "
-                + (probe.inEntitlements ? "已授予" : "未授予")
+                + (probe.inDeclared ? "已授予" : "未授予")
                 + " / " + (probe.container != nil ? "有容器" : "无容器")
                 + " / " + (probe.writable ? "可写" : "不可写"))
         }

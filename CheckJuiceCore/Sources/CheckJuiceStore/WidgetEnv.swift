@@ -7,7 +7,7 @@ import Foundation
 /// 于是各自在各自的容器里读写，谁也看不见谁，**全程不报错**。
 ///
 /// 有了这张纸条，主 App 的诊断页可以挨个候选组容器去翻：
-/// 翻到纸条就知道小组件实际落在哪块地方、它当时 entitlements 里有什么。
+/// 翻到纸条就知道小组件实际落在哪块地方、它当时以为有哪些组。
 /// 一次真机测试就能定位，而不是每轮重签重装重新猜。
 public enum WidgetEnv {
     public static let fileName = "widget_env.json"
@@ -15,8 +15,8 @@ public enum WidgetEnv {
     public struct Record: Codable, Sendable {
         /// 本进程解析出的组（nil = 一个都没拿到容器）。
         public var resolvedGroup: String?
-        /// 本进程 entitlements 里的组 —— 系统校验 `containerURL` 时看的就是它。
-        public var entitledGroups: [String]
+        /// 本进程当时从描述文件里读到的组清单。
+        public var declaredGroups: [String]
         public var writtenAt: Date
         /// 谁写的。目前只有小组件写，留个字段以免以后搞不清来源。
         public var process: String
@@ -27,7 +27,7 @@ public enum WidgetEnv {
     public static func writeHere(process: String = "widget") -> Bool {
         guard let container = AppGroup.containerURL else { return false }
         let record = Record(resolvedGroup: AppGroup.resolvedIdentifier,
-                            entitledGroups: AppGroup.entitledGroups,
+                            declaredGroups: AppGroup.declaredGroups,
                             writtenAt: Date(),
                             process: process)
         let encoder = JSONEncoder()

@@ -1,5 +1,4 @@
 import Foundation
-import Security
 
 /// 存储层能出的错。只有一种，但必须是个**会抛出来的**东西 —— 见 `DeviceStore.save`。
 public enum StoreError: LocalizedError, Equatable {
@@ -39,80 +38,55 @@ public enum StoreError: LocalizedError, Equatable {
 /// 「想共享配置得先有共享容器」的鸡生蛋问题。
 public enum AppGroup {
     /// 项目里声明的组。**正式签名（付费账号 / TestFlight）时就是它生效。**
-    /// 自签时它多半不在 entitlements 里，会被下面的探测跳过。
+    /// 自签时它多半不被授予，会被下面的探测跳过。
     public static let identifier = "group.com.llkhs.CheckJuice"
 
-    private static let entitlementKey = "com.apple.security.application-groups"
-
-    /// 本进程**实际生效**的 entitlements 里声明的组。
+    /// 候选组，顺序确定。
     ///
-    /// 用 `SecTaskCreateFromSelf` 直接问内核，不去解析 `.mobileprovision` ——
-    /// 系统在 `containerURL` 里校验的就是这份 entitlements，问同一份才不会自欺。
-    /// （解析描述文件还会踩到「appex 里那个文件被签名工具删了」这种坑。）
-    public static var entitledGroups: [String] {
-        guard let task = SecTaskCreateFromSelf(nil),
-              let raw = SecTaskCopyValueForEntitlement(
-                  task, entitlementKey as CFString, nil
-              ) as? [String]
-        else { return [] }
-        return raw
-    }
-
-    /// 按确定性顺序排列的候选组。
+    /// 来源只有**一个文件**：主 App bundle 里的 `embedded.mobileprovision`。
+    /// App 和小组件读的是同一个文件 → 得到同一个列表 → 必然选中同一个组。
+    /// 这就是为什么不需要任何额外的共享存储。
     ///
-    /// 三个来源，顺序固定（`identifier` → entitlements → 描述文件），
-    /// **所以 App 和小组件独立计算也会得到同一个列表**。
-    ///
-    /// 描述文件那一路是兜底：万一本进程 entitlements 读不出来，
-    /// 两边都还能从**主 App 的** `embedded.mobileprovision` 里得到同一份组清单
-    /// （小组件在主 App 的 bundle 里，读得到它）。
+    /// ⚠️ 试过用 `SecTaskCopyValueForEntitlement` 直接读本进程实际生效的 entitlements
+    /// （那才是 `containerURL` 校验的东西，更权威），但 **`SecTask` 系列是 macOS-only，
+    /// iOS SDK 里根本没有** —— CI 报 `cannot find 'SecTaskCreateFromSelf' in scope`。
+    /// 想让 CI 替你验，就别凭印象用 API。
     public static var candidates: [String] {
         var seen = Set<String>()
         var out: [String] = []
-        let sources = [entitledGroups.sorted(), profileGroups]
-        for id in ([identifier] + sources.flatMap { $0 }) where seen.insert(id).inserted {
+        for id in ([identifier] + declaredGroups) where seen.insert(id).inserted {
             out.append(id)
         }
         return out
     }
 
-    /// 描述文件里声明的组。兜底用。
-    private static var profileGroups: [String] {
-        var groups: [String] = []
-        for url in profileURLs {
-            if let list = ProvisioningProfile.appGroups(at: url) {
-                groups.append(contentsOf: list)
-            }
-        }
+    /// 主 App 描述文件里声明的组（字典序，保证两侧顺序一致）。
+    public static var declaredGroups: [String] {
+        guard let url = containingAppProfileURL,
+              let groups = ProvisioningProfile.appGroups(at: url) else { return [] }
         return groups.sorted()
     }
 
-    /// 自己 bundle 的描述文件 + **外层 App bundle** 的描述文件。
+    /// 主 App bundle 的 `embedded.mobileprovision`。
     ///
-    /// 后者是关键：小组件跑在 `<App>.app/PlugIns/<Widget>.appex` 里，能读到主 App 的
-    /// 描述文件，于是两个进程有了一份**共同的**组清单。
-    private static var profileURLs: [URL] {
-        var urls: [URL] = []
-        if let own = Bundle.main.url(forResource: "embedded",
-                                     withExtension: "mobileprovision") {
-            urls.append(own)
-        }
-        if let containing = containingAppProfileURL, !urls.contains(containing) {
-            urls.append(containing)
-        }
-        return urls
-    }
-
+    /// 小组件进程跑在 `<App>.app/PlugIns/<Widget>.appex` 里，往上就能找到主 App bundle ——
+    /// **它能读这个文件**，所以两个进程有同一份权威来源。
+    /// 不像 appex 自己那份描述文件，签名工具经常直接删掉。
     private static var containingAppProfileURL: URL? {
+        if Bundle.main.bundleURL.pathExtension == "app" {
+            return profile(in: Bundle.main.bundleURL)
+        }
         var dir = Bundle.main.bundleURL
         for _ in 0..<4 {
             dir = dir.deletingLastPathComponent()
-            if dir.pathExtension == "app" {
-                let profile = dir.appendingPathComponent("embedded.mobileprovision")
-                return FileManager.default.fileExists(atPath: profile.path) ? profile : nil
-            }
+            if dir.pathExtension == "app" { return profile(in: dir) }
         }
         return nil
+    }
+
+    private static func profile(in appBundle: URL) -> URL? {
+        let url = appBundle.appendingPathComponent("embedded.mobileprovision")
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
     /// 第一个真能拿到容器的候选。只解析一次。
@@ -141,12 +115,12 @@ public enum AppGroup {
 
     /// 容器不可用时给用户看的那句话（主页横幅和诊断页共用，别抄两份）。
     public static var unavailableMessage: String {
-        if entitledGroups.isEmpty {
-            return "这个 App 现在一个可用的 App Group 都没有，"
-                + "物品不会真正存下来，小组件也读不到。（设置页 → 诊断 看详情）"
+        if declaredGroups.isEmpty {
+            return "找不到主 App 的描述文件，没法知道这个包被授予了哪些 App Group。"
+                + "项目声明的「\(identifier)」也用不了 —— 设置页 → 排查，看详细结论。"
         }
-        return "系统授予了 \(entitledGroups.count) 个组，但一个都拿不到容器："
-            + entitledGroups.joined(separator: ", ")
-            + "。（设置页 → 诊断 看详情）"
+        return "描述文件授予了 \(declaredGroups.count) 个组，但一个都拿不到容器："
+            + declaredGroups.joined(separator: ", ")
+            + "。设置页 → 排查，看详细结论。"
     }
 }
