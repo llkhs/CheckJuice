@@ -48,6 +48,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.llkhs.CheckJuice
         PRODUCT_NAME: CheckJuice
         CODE_SIGN_ENTITLEMENTS: CheckJuice/CheckJuice.entitlements
+        # ⚠️ 必须显式指定，否则 Assets.xcassets 里那张图**不会被当成 App 图标**。
+        # Xcode 新建工程时这条是模板自动写进去的；XcodeGen 不会替我们加，
+        # 所以少这一行 = 传了图也白传（现象：桌面还是默认白图标，且不报任何错）。
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Check Juice
         INFOPLIST_KEY_UILaunchScreen_Generation: YES

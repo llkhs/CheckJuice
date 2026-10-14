@@ -11,6 +11,29 @@
 | SPM 模块 | `CheckJuiceCore` / `CheckJuiceStore` | 算法 / 持久化，两个 target |
 | Bundle ID | `com.llkhs.CheckJuice` | **占位**，签名阶段改为描述文件实际覆盖的值 |
 | App Group | `group.com.llkhs.CheckJuice` | **占位**，签名阶段从描述文件读取 |
+| App 图标 | `CheckJuice/Assets.xcassets/AppIcon.appiconset/AppIcon.png` | 见下方图标规范 |
+
+### 0.1 App 图标规范
+**目录名和文件名不是一回事**，这是最容易搞错的地方：
+
+- **目录名 `AppIcon.appiconset` 是锁死的** —— 它必须和 `project.yml` 里的
+  `ASSETCATALOG_COMPILER_APPICON_NAME` 一致，否则资源目录里那张图**不会被采用**
+  （现象：桌面还是白图标，且构建不报任何错）。
+- **PNG 文件名本身是自由的** —— 它由同目录的 `Contents.json` 里 `"filename"` 绑定。
+  本项目定为 `AppIcon.png`（Apple 自己的模板惯例）。
+
+> ⚠️ **不要只传图片、忘了 `Contents.json`**。手动往仓库传图（不经 Xcode）时，
+> `"filename"` 没人替你填 —— 资源和图标就对不上号了。
+
+| 项 | 要求 | 说明 |
+|---|---|---|
+| 尺寸 | **1024×1024** | iOS 17 起只需这一张，系统自己缩放出全部尺寸 |
+| 格式 | PNG（JPEG 也认，但纯色块会有压缩噪点） | |
+| **透明度** | **绝对不允许** | App Store 校验直接打回；本地自签虽能装，边角会出现异常底色 |
+| 圆角 | **不要自己画** | 系统会裁切，画了就露出两层边 |
+| 色彩 | sRGB | |
+
+本机检查：`python3 /var/minis/workspace/check_appicon.py <图片>`（纯文件头解析，无依赖）。
 
 > ⚠️ `-ios` 后缀**不要加**。仓库名以后可以随便改（GitHub 会自动重定向），
 > 但 Bundle ID 一旦上架/装到设备就基本不能动，改它等于换一个 App、用户数据全丢。
