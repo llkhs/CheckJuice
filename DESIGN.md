@@ -469,9 +469,36 @@ GitHub Actions → archive → exportArchive（p12 + .mobileprovision 手动签�
    「添加物品 → 界面一切正常 → 重启全没了 → 小组件永远空着」，全程零提示。
 
 **已修**：`save` 改抛 `StoreError.appGroupUnavailable`；`AppModel.storageError` 让主页挂红横幅；
-新增**诊断页**（设置 → 排查）摊开：`AppGroup.identifier` / 容器可用性 / 磁盘上真实存在的文件与条数 /
-小组件正在读的快照内容 / 两个 bundle 各自描述文件里声明的 App Group 清单。
+新增**诊断页**（设置 → 排查）摊开：容器可用性 / 磁盘上真实存在的文件与条数 /
+小组件正在读的快照内容 / 描述文件授予的组清单 / **逐个候选组的探测结果**。
 失败要响，不要静默。
+
+#### 6.5.1 换证书 = 数据必丢，没有代码解
+
+**真机实测（2026-10-14）**：同一个 App 两次自签，App Group 前缀不同 ——
+
+| 包 | App Group |
+|---|---|
+| 第一次 | `group.163448086d`**`837d1e`**`.1 ~ .5` |
+| 第二次 | `group.163448086d`**`925d1e`**`.1 ~ .5` |
+
+**组标识符随签名证书变化。** 换证书后系统给一块全新的空容器，
+而旧容器在新包里 `containerURL` 直接返回 nil —— 数据**技术上救不回来**。
+
+**为什么不做「检测并按提醒」**（试过，已删）：唯一能跨重装留下的记录只能存在 App Group 里，
+而「组标识符变了」这件事偏偏就发生在「没有一个可写的组」的时候。
+换证书时**必须先卸载旧包**才能装新包（iOS 不允许覆盖），
+**卸载会一并删掉 App 私有容器**（`UserDefaults.standard`、`<App>.app` 自身）——
+恰好在唯一会丢数据的场景里，检测永远读不到上次的记录。**其余方案都不需要。**
+
+**唯一有效、且不依赖任何跨重装存储的规则**（这条 SOP 比任何代码都值钱）：
+
+1. **每次重签都用同一张证书** → 组标识符不变 → 数据保持。
+2. **换证书前**：打开设置 → 诊断，它列出**所有候选容器**的内容 ——
+   抄下来或截图，重装后照着重建。
+3. 证书还没到期时**先把该记的记完**，别等过期被逼着换。
+
+> 想彻底不用操心这件事 → 付费账号 + TestFlight，见 6.2。
 
 ### 6.6 ⭐ 正解：不硬编码标识符，按描述文件自动解析
 
@@ -488,26 +515,24 @@ GitHub Actions → archive → exportArchive（p12 + .mobileprovision 手动签�
 
 #### 怎么拿到「实际生效的那套」
 
-**不要去解析 `.mobileprovision` 文件**（我一开始就是这么想的，绕远了）——进程可以直接问系统：
+**先试了直接问内核 —— 它不存在。**
 
 ```swift
+// ❌ 编译不过
 let task = SecTaskCreateFromSelf(nil)
 SecTaskCopyValueForEntitlement(task, "com.apple.security.application-groups" as CFString, nil)
 ```
 
-**踩了个坑，记下来：`SecTask` 系列是 macOS-only。**
-
-我第一版就是上面那么写的，理由很硬：「问本进程实际生效的 entitlements，那正是
-`containerURL` 校验的东西」。CI 直接给了我一巴掌：
+理由本来很硬：那正是 `containerURL` 校验的东西。CI 直接给了我一巴掌：
 
 ```
 error: cannot find 'SecTaskCreateFromSelf' in scope
 ```
 
-**iOS SDK 里没有 `SecTask.h`**（`SecCode` 那套同理，也是 macOS-only）。
-凭印象用 API、还指望 CI 兜底 —— 那 CI 就会用一整天的时间成本教你做人。
+**`SecTask` 系列是 macOS-only，iOS SDK 里根本没有**（`SecCode` 同理）。
+凭印象用 API、还指望 CI 兜底 —— 那 CI 就用一整天教你做人。
 
-**改用描述文件解析**，反而更简单：只认**主 App 那一份**
+**最终用描述文件解析**，反而更简单：只认**主 App 那一份**
 `<App>.app/embedded.mobileprovision` 里的 `Entitlements.com.apple.security.application-groups`。
 
 ```swift
