@@ -43,12 +43,18 @@ struct DeviceEditorView: View {
     let editingID: UUID?
 
     @State private var name = ""
-    @State private var lifeAmount = 30.0
-    @State private var lifeUnit: LifeUnit = .days
-    @State private var notifyLeadDays = 14
+    @State private var lifeAmount = 72.0
+    /// 默认停在**小时**上：这个 App 存在的理由是「今天够不够用」，
+    /// 而现实里被盯得最紧的正是 4 小时~几天的短命电池。
+    /// 长寿命设备切一下「天」就好，反过来的默认值会让短命设备根本填不出来。
+    @State private var lifeUnit: LifeUnit = .hours
+    @State private var notifyLeadAmount = 14.0
+    @State private var notifyLeadUnit: LifeUnit = .days
     @State private var rows: [EventDraft] = []
     @State private var referencePrior: ReferencePrior?
     @State private var loaded = false
+    /// 底部「删除这个物品」的确认框开关。
+    @State private var showingDeleteConfirm = false
 
     private var isEditing: Bool { editingID != nil }
 
@@ -79,6 +85,19 @@ struct DeviceEditorView: View {
             }
         }
         .onAppear(perform: load)
+        .confirmationDialog(
+            "把「\(name)」移到回收站？",
+            isPresented: $showingDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("移到回收站", role: .destructive) {
+                if let id = editingID { appModel.delete(id: id) }
+                dismiss()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("\(Int(Device.trashRetentionDays)) 天内可以在「设置 → 回收站」里找回来，之后自动清除。")
+        }
     }
 
     // MARK: - 各段
@@ -200,22 +219,51 @@ struct DeviceEditorView: View {
 
     private var notifySection: some View {
         Section {
-            Stepper(value: $notifyLeadDays, in: 1...60) {
-                Text("提前 \(notifyLeadDays) 天提醒")
+            HStack {
+                TextField("提前", value: $notifyLeadAmount, format: .number)
+                    .keyboardType(.decimalPad)
+                Picker("", selection: $notifyLeadUnit) {
+                    ForEach(LifeUnit.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 130)
+            }
+            Text("= \(Int(notifyLeadHours.rounded())) 小时")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if notifyLeadHours >= lifeHours {
+                Label("提醒提前量已经不小于电池寿命了 —— 这个物品会一直处于「该备货」状态。"
+                      + "短命电池（几小时到几天）建议用小时作单位。",
+                      systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
             }
         } header: {
-            Text("提醒")
+            Text("提前多久提醒")
         } footer: {
-            Text("留出下单 / 出门采购的时间。到点主页和小组件会变黄。")
+            Text("留出下单 / 出门采购的时间。距风险窗口（最坏情况）不足这个提前量时，"
+                 + "主页和小组件会变黄。")
         }
+    }
+
+    /// 用户填的「大概寿命」换算成小时 —— 模型的唯一单位。
+    private var lifeHours: Double {
+        max(lifeAmount, 1) * lifeUnit.hoursPerUnit
+    }
+
+    /// 提前量换算成小时 —— 模型的唯一单位。
+    private var notifyLeadHours: Double {
+        max(notifyLeadAmount, 0) * notifyLeadUnit.hoursPerUnit
     }
 
     private var deleteSection: some View {
         Section {
             Button("删除这个物品", role: .destructive) {
-                if let id = editingID { appModel.delete(id: id) }
-                dismiss()
+                showingDeleteConfirm = true
             }
+        } footer: {
+            Text("会先进回收站，\(Int(Device.trashRetentionDays)) 天内能捞回来。")
         }
     }
 
@@ -300,7 +348,15 @@ struct DeviceEditorView: View {
             lifeUnit = .hours
             lifeAmount = totalHours
         }
-        notifyLeadDays = max(1, Int((device.notifyLeadHours / 24).rounded()))
+        // 提醒提前量：能整除 24 就用天，否则用小时 —— 4 小时电池填「1 天」太糙。
+        let lead = device.notifyLeadHours
+        if lead >= 24, lead.truncatingRemainder(dividingBy: 24) == 0 {
+            notifyLeadUnit = .days
+            notifyLeadAmount = lead / 24
+        } else {
+            notifyLeadUnit = .hours
+            notifyLeadAmount = max(lead, 1)
+        }
         rows = device.sortedEvents.map { EventDraft(at: $0.at, kind: $0.kind) }
         if rows.isEmpty { rows = [EventDraft(at: Date(), kind: .initial)] }
     }
@@ -315,9 +371,9 @@ struct DeviceEditorView: View {
         return Device(
             id: editingID ?? UUID(),
             name: draftName,
-            nominalLifeHours: max(lifeAmount, 1) * lifeUnit.hoursPerUnit,
+            nominalLifeHours: lifeHours,
             events: ordered.map { ReplacementEvent(at: $0.at, kind: $0.kind) },
-            notifyLeadHours: Double(notifyLeadDays) * 24,
+            notifyLeadHours: notifyLeadHours,
             referencePrior: referencePrior
         )
     }

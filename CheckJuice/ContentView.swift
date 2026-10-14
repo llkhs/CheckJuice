@@ -29,6 +29,13 @@ struct ContentView: View {
     /// 关闭时把 state 置 nil 会让内容在整个收起动画里先消失。
     private struct ReplacementTarget: Identifiable { let id: UUID }
 
+    /// 待确认删除的那台设备。
+    ///
+    /// **存整个 `Device` 而不是 id**：确认框要把名字念给用户听，
+    /// 拆成 id + name 两个 `@State` 就会出现「清了 id 忘了清 name」的错位窗口，
+    /// 而这里只可能是整台设备一起进、一起出。`Device` 本来就是 `Hashable` 的。
+    @State private var pendingDelete: Device?
+
     var body: some View {
         NavigationStack {
             List {
@@ -54,9 +61,9 @@ struct ContentView: View {
                             showMedian: model.showMedianSubline
                         )
                     }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
-                            model.delete(id: item.device.id)
+                            pendingDelete = item.device
                         } label: {
                             Label("删除", systemImage: "trash")
                         }
@@ -99,6 +106,20 @@ struct ContentView: View {
             }
             .sheet(item: $replacementTarget) { target in
                 RecordReplacementView(deviceID: target.id)
+            }
+            .confirmationDialog(
+                "移到回收站？",
+                isPresented: Binding(
+                    get: { pendingDelete != nil },
+                    set: { if !$0 { pendingDelete = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: pendingDelete
+            ) { device in
+                Button("移到回收站", role: .destructive) { model.delete(id: device.id) }
+            } message: { device in
+                Text("「\(device.name)」会先放在回收站里，"
+                     + "\(Int(Device.trashRetentionDays)) 天内可以在「设置 → 回收站」找回来，之后自动清除。")
             }
             .sheet(isPresented: $showingAdd) {
                 // 推入导航栈时外面已经有栈了，弹 sheet 得自己包一层。

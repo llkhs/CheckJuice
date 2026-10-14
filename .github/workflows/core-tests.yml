@@ -5,7 +5,13 @@ name: Core Tests
 on:
   push:
     branches: [master]
+    paths-ignore:
+      - '**.md'          # 文档改动不触发。Swift 代码和 reference/ 才是输入
+      - '.gitignore'
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
   workflow_dispatch:
 
 concurrency:

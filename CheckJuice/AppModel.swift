@@ -24,6 +24,10 @@ final class AppModel {
     private let snapshotStore = SnapshotStore()
     private let engine = LifetimeModel()
 
+    /// **全部**设备，含回收站里的（磁盘上就是这么存的）。
+    ///
+    /// 别的地方一律用 `activeDevices` —— 让「回收站里的东西算不算数」
+    /// 只在这一处回答，比在每个调用点各写一遍 `!$0.isTrashed` 可靠。
     var devices: [Device] = []
 
     /// 落盘出问题时的人话原因。非 nil 就在主页顶上挂一条红横幅。
@@ -46,7 +50,35 @@ final class AppModel {
         devices = deviceStore.load()
         // 启动时也要判一次，不然只有「下一次 commit」才会发现容器是空的。
         if !AppGroup.isAvailable { storageError = AppGroup.unavailableMessage }
+        purgeExpiredTrash()
         reloadWidget()
+    }
+
+    /// 还在用的设备（主页、预测、小组件都只看这些）。
+    var activeDevices: [Device] { devices.filter { !$0.isTrashed } }
+
+    /// 回收站里的设备，最近丢的排最前。
+    var trashedDevices: [Device] {
+        devices.filter(\.isTrashed)
+            .sorted { ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast) }
+    }
+
+    /// 回收站里每条还剩几天被自动清掉。判定在 Core（`Device.daysLeftInTrash`），
+    /// 这里只是把「现在」递进去 —— View 层不该自己算时间边界。
+    func daysLeftInTrash(_ device: Device) -> Int {
+        device.daysLeftInTrash(now: Date())
+    }
+
+    /// 清掉躺够 15 天的。
+    ///
+    /// 只在启动时跑，不做后台定时 —— App 本来就随时会被系统杀掉，
+    /// 靠「下次打开时顺手清」最省事，而且用户打开时看到的状态和磁盘始终一致。
+    private func purgeExpiredTrash() {
+        let now = Date()
+        let survivors = devices.filter { !$0.isTrashExpired(now: now) }
+        guard survivors.count != devices.count else { return }
+        devices = survivors
+        persist()
     }
 
     /// 切换显示样式：落盘 + 立刻重算快照刷新小组件。
@@ -65,8 +97,10 @@ final class AppModel {
     }
 
     /// 全部设备按紧急度排序 —— 最该处理的排最前。
+    ///
+    /// 只看 `activeDevices`：回收站里的东西不该再占着主页、更不该进风险排序。
     var ranked: [RankedDevice] {
-        engine.predictions(for: devices, now: Date())
+        engine.predictions(for: activeDevices, now: Date())
             .map { RankedDevice(device: $0.device, prediction: $0.prediction) }
             .sorted { lhs, rhs in
                 let a = Self.rank(lhs.prediction.urgency)
@@ -117,14 +151,47 @@ final class AppModel {
         devices.first { $0.id == id }
     }
 
+    /// **软删除**：移进回收站，不是真删。
+    ///
+    /// 名字没改成 `moveToTrash`，是为了让主页那个 `.swipeActions` 的调用点保持原样 ——
+    /// 交互上它就是「删除」，只是底下多了一层可撤销的缓冲。
     func delete(id: UUID) {
+        guard let index = devices.firstIndex(where: { $0.id == id }) else { return }
+        devices[index].deletedAt = Date()
+        commit()
+    }
+
+    /// 从回收站捞回来。
+    func restore(id: UUID) {
+        guard let index = devices.firstIndex(where: { $0.id == id }) else { return }
+        devices[index].deletedAt = nil
+        commit()
+    }
+
+    /// 真删一条。只从回收站调用 —— 正常列表里没有「彻底删除」这个动作。
+    func purge(id: UUID) {
         devices.removeAll { $0.id == id }
+        commit()
+    }
+
+    /// 清空回收站。
+    func emptyTrash() {
+        devices.removeAll(where: \.isTrashed)
         commit()
     }
 
     // MARK: - 落盘
 
     private func commit() {
+        persist()
+        reloadWidget()
+    }
+
+    /// 只落盘，不碰小组件。
+    ///
+    /// 拆出来是给**启动时清回收站**用的：那一步发生在 `init` 里，
+    /// 紧接着 `reloadWidget()` 就会被调一次 —— 再调一遍纯属白算。
+    private func persist() {
         if !AppGroup.isAvailable {
             // 不吞掉：这是「界面一切正常、重启全没了」的唯一线索。
             storageError = AppGroup.unavailableMessage + "（设置页 → 诊断 看详情）"
@@ -136,7 +203,6 @@ final class AppModel {
                 storageError = "写入失败：" + error.localizedDescription
             }
         }
-        reloadWidget()
     }
 
     /// 重算并刷新小组件。不调这个，小组件会一直显示上次的快照。
@@ -147,7 +213,9 @@ final class AppModel {
     func reloadWidget() {
         let now = Date()
         let style = displayStyle
-        let snapshots = engine.predictions(for: devices, now: now)
+        // 快照也只看未删除的：否则回收站里的东西还会在桌面上晃，
+        // 用户刚「删掉」的物品出现在小组件里，是纯纯的 bug 观感。
+        let snapshots = engine.predictions(for: activeDevices, now: now)
             .map { DeviceSnapshot(device: $0.device, prediction: $0.prediction, style: style) }
         try? snapshotStore.save(WidgetSnapshot(generatedAt: now,
                                                devices: snapshots,

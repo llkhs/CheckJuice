@@ -75,8 +75,47 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
     /// 借用同款设备的历史当先验（界面上暂无入口）。
     public var referencePrior: ReferencePrior?
 
+    /// 被丢进回收站的时刻；`nil` = 正常存在。
+    ///
+    /// **为什么是软删除而不是直接从库里抹掉**：电池寿命预测的全部价值都在历史样本上，
+    /// 而样本要靠几个月甚至几年才攒得起来。手滑删掉一台记录了三年的设备、
+    /// 然后发现「反正得重新填」，这代价和误删照片不是一个量级。
+    ///
+    /// 可选类型 → 合成 `Codable` 走 `decodeIfPresent`，老的 JSON 少这个键照常解码，
+    /// 所以不需要任何迁移代码。
+    public var deletedAt: Date?
+
+    /// 在回收站里。
+    public var isTrashed: Bool { deletedAt != nil }
+
+    /// 回收站保留时长：**15 天**后自动清掉。
+    ///
+    /// 取 15 天是因为「发现某台设备被误删」通常发生在想起来要用它的那一刻，
+    /// 而这多半跟一次换电池周期有关。30 天太长、7 天太短。
+    public static let trashRetentionDays: Double = 15
+
     /// 默认提前量：336 小时 = 14 天。留出快递 / 出门采购的时间。
     public static let defaultNotifyLeadHours: Double = 336
+
+    /// 在回收站里已经躺够 `trashRetentionDays` 了吗。
+    ///
+    /// 判定放 Core 不放 App 层：这是个纯粹的、有边界的时间比较，
+    /// 而**边界条件正是最容易写错的地方**（`<` 还是 `<=`、用小时还是用天）。
+    /// 放在 View 里就没法用 `swift test` 钉住 —— 那只能靠手点验。
+    public func isTrashExpired(now: Date) -> Bool {
+        guard let deletedAt else { return false }
+        return now.timeIntervalSince(deletedAt) >= Device.trashRetentionDays * 24 * 3600
+    }
+
+    /// 回收站里还剩几天被自动清掉（向上取整到「天」）。
+    ///
+    /// 向上取整是**故意偏保守**：剩 0.1 天时说「还剩 1 天」而不是「0 天」，
+    /// 用户不会因为看到 0 而以为早就没了；真正归零只在「下次打开就清」时出现。
+    public func daysLeftInTrash(now: Date) -> Int {
+        guard let deletedAt else { return 0 }
+        let leftHours = Device.trashRetentionDays * 24 - now.timeIntervalSince(deletedAt) / 3600
+        return max(0, Int(ceil(leftHours / 24)))
+    }
 
     public init(
         id: UUID = UUID(),
@@ -84,7 +123,8 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
         nominalLifeHours: Double,
         events: [ReplacementEvent] = [],
         notifyLeadHours: Double = Device.defaultNotifyLeadHours,
-        referencePrior: ReferencePrior? = nil
+        referencePrior: ReferencePrior? = nil,
+        deletedAt: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -92,6 +132,7 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
         self.events = events
         self.notifyLeadHours = notifyLeadHours
         self.referencePrior = referencePrior
+        self.deletedAt = deletedAt
     }
 
     /// 按时间升序排列的事件。

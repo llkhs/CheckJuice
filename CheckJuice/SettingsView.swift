@@ -19,6 +19,7 @@ import CheckJuiceCore
 /// 数字一律**朝零截断**（剩余往少了说、耗尽往少了说，两个方向都不吹牛）。
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var model
 
     let style: ExhaustDisplayStyle
     let showMedianSubline: Bool
@@ -63,11 +64,26 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    NavigationLink {
+                        TrashView()
+                    } label: {
+                        HStack {
+                            Text("回收站")
+                            Spacer()
+                            // 空的时候不显示「0」，那是个噪音；有东西才提醒你去看一眼。
+                            if !model.trashedDevices.isEmpty {
+                                Text("\(model.trashedDevices.count)")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                     NavigationLink("诊断") { DiagnosticsView() }
                 } header: {
                     Text("排查")
                 } footer: {
-                    Text("物品存不下来、小组件一直空着的时候，这里能看到系统那边的原话。")
+                    Text("删掉的物品会先进回收站躺 \(Int(Device.trashRetentionDays)) 天，"
+                         + "之后自动清除。物品存不下来、小组件一直空着的时候，"
+                         + "「诊断」里能看到系统那边的原话。")
                 }
             }
             .navigationTitle("设置")

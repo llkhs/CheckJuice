@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import CheckJuiceCore
 import CheckJuiceStore
 
 /// 诊断页。
