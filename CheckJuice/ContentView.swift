@@ -14,10 +14,42 @@ extension Urgency {
     }
 }
 
+/// 「已经用了多久」。纯显示换算放 UI 层，Core 只认小时。
+/// 阈值跟 `Prediction` 里那套保持一致：≥60 天说月，≥2 天说天，否则说小时。
+private func elapsedText(_ hours: Double) -> String {
+    let days = hours / 24
+    if days >= 60 { return "已用 \(Int(days / 30)) 个月" }
+    if days >= 2 { return "已用 \(Int(days)) 天" }
+    return "已用 \(Int(hours)) 小时"
+}
+
 struct ContentView: View {
     @Environment(AppModel.self) private var model
     @State private var showingAdd = false
     @State private var showingSettings = false
+    /// 待确认「这次是哪种情况」的设备。非 nil 就弹询问框。
+    @State private var replacementCandidate: Device?
+
+    // MARK: - 换电池时的「哪种情况」预选
+
+    /// 判据：已经越过 P10 耗尽时刻 → 多半是自然耗尽；还没到 → 多半是提前换的。
+    /// 这只是**预选**，用户永远能改。用 P10（最坏情况）而不是中位数当分界，
+    /// 是因为这个 App 的整个立场就是「按最坏情况准备」。
+    private func likelyEventKind(for device: Device) -> EventKind {
+        let item = model.ranked.first { $0.device.id == device.id }
+        guard let item else { return .exhausted }
+        return Date() >= item.prediction.p10ExhaustAt ? .exhausted : .preventive
+    }
+
+    private func replacementOptions(for device: Device) -> [EventKind] {
+        let likely = likelyEventKind(for: device)
+        return [likely] + [EventKind.exhausted, .preventive, .faulty].filter { $0 != likely }
+    }
+
+    private var replacementTitle: String {
+        guard let device = replacementCandidate else { return "这次是哪种情况？" }
+        return "这次是哪种情况？（按预测，多半是「\(likelyEventKind(for: device).displayName)」）"
+    }
 
     var body: some View {
         NavigationStack {
@@ -35,9 +67,11 @@ struct ContentView: View {
                                 Label("删除", systemImage: "trash")
                             }
                         }
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
                             Button {
-                                model.markReplaced(item.device)
+                                // 不直接落库：先问一句「没电了还是提前换的」。
+                                // 这一句不能省 —— 提前换的那次不能算寿命样本。
+                                replacementCandidate = item.device
                             } label: {
                                 Label("已换电池", systemImage: "arrow.triangle.2.circlepath")
                             }
@@ -71,6 +105,27 @@ struct ContentView: View {
                     }
                 }
             }
+            .confirmationDialog(
+                replacementTitle,
+                isPresented: Binding(
+                    get: { replacementCandidate != nil },
+                    set: { if !$0 { replacementCandidate = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: replacementCandidate
+            ) { device in
+                // 最可能的那种排最前。iOS 的 confirmationDialog 没有「默认项高亮」，
+                // 所以「预选」这件事靠排序 + 标题里点名两处一起表达。
+                ForEach(replacementOptions(for: device), id: \.self) { kind in
+                    Button(kind.displayName) {
+                        model.markReplaced(device, kind: kind)
+                    }
+                }
+                Button("取消", role: .cancel) {}
+            } message: { _ in
+                Text("只有「自然耗尽」算寿命样本。提前换那次要是也算进去，"
+                     + "模型会以为电池只能撑这么久，越预测越短。")
+            }
             .sheet(isPresented: $showingAdd) {
                 AddDeviceView { device in model.add(device) }
             }
@@ -102,7 +157,7 @@ struct DeviceRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.device.name)
                     .font(.headline)
-                Text(item.device.kind.displayName)
+                Text(elapsedText(item.prediction.ageHours))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

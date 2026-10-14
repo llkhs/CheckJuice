@@ -87,9 +87,18 @@
 ### 3.2 先验
 
 `log(寿命) ~ Normal(m₀, τ²)`
-- `m₀ = log(nominalLifeHours)`，`τ = 0.5`（相对不确定度 ±50%）
-- 若设备引用了 `refDeviceId` → 用参照设备的历史后验当先验，`τ` 收紧到 0.25 ⭐
-- 若用户填了自定义寿命 → `τ = 0.35`
+- `m₀ = log(nominalLifeHours)`（用户填的「大概能用多久」），`τ = 0.5`
+
+**只有一个先验来源，只有一个 τ。** 曾经分三档（型号表 0.5 / 用户手填 0.35 / 引用同款 0.25），
+现在型号表删了（见 2.1），手填也成了唯一入口，三档自然塌缩成一档。
+
+取 `τ = 0.5` 而不是更紧的 0.35：用户第一次填的估计值**本质是人口级猜测**——他一次实测都没有，
+±50% 才是诚实的宽度。而且本 App 的立场是风险厌恶，初期窗口宽 = P10 更低 = 提醒更早 = 更安全。
+实测冷启动 **P10 ≈ 估值的 41%**（估 8760h → P10 3572h）。真样本进来后 σ_post 会被数据压下去，
+这个宽度只在头几轮起作用。
+
+- 若设备带 `referencePrior` → 用参照设备的历史后验当先验，其自带 `tau`（≈0.25）直接采用 ⭐
+  （核心库能力，界面暂无入口）
 
 ### 3.3 观测与加权
 
@@ -410,6 +419,27 @@ GitHub Actions → archive → exportArchive（p12 + .mobileprovision 手动签�
 | 快捷指令 / Siri | AppIntents 已做，加 `AppShortcuts` 即可，零重构 |
 | watchOS 表盘显示 | Core 是纯 Swift 包，直接复用 |
 | iCloud 同步 | SwiftData 的 `ModelConfiguration` 换 CloudKit 容器 |
+| 模型预设（URL 拉取） | 见下 —— 类型已定（`ModelPreset`），只差拉取 |
+
+### 7.1 模型预设：能换参数，**换不了算法**
+
+想要的能力：模型参数放 git，App 按 URL 拉下来同步，随时切一套新的调参。
+
+**硬约束（不是懒，是物理）**：**iOS 不允许下载并执行代码** —— App Store 审核指南 2.5.2
+明令禁止，且系统没有 JIT。所以「git 上放两套算法代码、App 拉下来跑」这条路是**死的**。
+
+**但是「模型 = 参数」完全可行**：本模型的结构是固定死的（对数正态 + 正态共轭），
+真正会变的只有 7 个数（`tauUser` / `sigmaMin` / `sigmaUnidentified` / `sigmaPredictionCap` /
+`beta` / `z10` / `minSamplesForVariance`）。把这 7 个数组装成 JSON 就是「一套模型」。
+这跟 Core ML 的权重算「数据」而不算「代码」是同一个道理，不受 2.5.2 限制。
+
+- **格式已定**：`ModelPreset { id, name, summary, config }`，`config` 就是 `ModelConfig` 本身，
+  带 `Codable`，既能内置也能从 URL 反序列化。键名由 `ModelPresetTests` 钉死 ——
+  一旦发布成 URL，字段名就是对外的契约，改个名字会让人手机上拉的旧 manifest 静默失效。
+- **还没做**：拉取、校验、存 App Group、设置里切换。等 M2b 的设置界面到位再接，
+  那时是**纯增量**（加一个 URL 字段 + 一个 fetch + 一个 picker），不用动模型本身。
+- **拉下来的东西必须过范围校验**，越界就丢掉、退回上一个已知可用值。远端数据能改你的预测，
+  不能无条件信任。
 
 ---
 

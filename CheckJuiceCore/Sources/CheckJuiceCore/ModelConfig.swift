@@ -1,7 +1,7 @@
 import Foundation
 
 /// 模型超参数。集中一处，便于调参与测试。
-public struct ModelConfig: Sendable, Equatable {
+public struct ModelConfig: Codable, Hashable, Sendable {
     /// 冷启动先验的相对不确定度。
     ///
     /// 模型唯一的先验来源是用户填的「大概能用多久」，而那本质是个人口级猜测：
