@@ -138,9 +138,17 @@ struct DeviceEditorView: View {
     /// **Swift 的 key path 不能进元组**（`\.element.id` 编译不过）。
     private struct Row: Identifiable {
         let id: UUID
+        let at: Date
         let isAnchor: Bool
         let audit: IntervalAudit?
     }
+
+    /// 时间线起点 —— 最早那条记录的时刻。
+    ///
+    /// **它是整条时间线的锚**：改一下，它到下一颗之间的那段间隔就整个变了样，
+    /// 而那段间隔正是这个 App 唯一的证据来源（`.initial` 只能当起点不能当终点）。
+    /// 所以编辑已有物品时它只读、不可删，见 `eventRow` / `deleteRows`。
+    private var anchorDate: Date? { orderedRows.first?.at }
 
     private var rowModels: [Row] {
         let sorted = orderedRows
@@ -154,6 +162,7 @@ struct DeviceEditorView: View {
         return sorted.map { draft in
             Row(
                 id: draft.id,
+                at: draft.at,
                 isAnchor: draft.id == anchorID,
                 audit: draft.id == anchorID ? nil : auditsByEnd[draft.at]
             )
@@ -162,8 +171,13 @@ struct DeviceEditorView: View {
 
     private var eventSection: some View {
         Section {
-            ForEach(rowModels) { eventRow($0) }
-                .onDelete(perform: deleteRows)
+            ForEach(rowModels) { row in
+                eventRow(row)
+                    // 起点不能删：删了它，时间线起点就顺延到下一条 ——
+                    // 等于绕个弯把基准值改了。
+                    .deleteDisabled(row.isAnchor)
+            }
+            .onDelete(perform: deleteRows)
 
             Button {
                 rows.append(EventDraft(at: Date(), kind: .exhausted))
@@ -174,8 +188,8 @@ struct DeviceEditorView: View {
             Text("更换记录")
         } footer: {
             Text(isEditing
-                 ? "记不清确切日期也没关系，先填个大概。最早那条只是时间线的起点。"
-                 : "已经换过几次？把它们补进来，预测就不用从零学起。")
+                 ? "最早那条是时间线的起点，定了就不能改 —— 后面每一段的时长都是从它算起的。"
+                 : "已经换过几次？把它们补进来，预测就不用从零学起。最早那条会成为时间线起点。")
         }
     }
 
@@ -187,9 +201,26 @@ struct DeviceEditorView: View {
 
         VStack(alignment: .leading, spacing: 6) {
             if isAnchor {
-                Text("上次换电池的时刻 · 从这儿开始算")
+                Text(isEditing
+                     ? "上次换电池的时刻 · 时间线起点（不可修改）"
+                     : "上次换电池的时刻 · 从这儿开始算")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if isEditing {
+                    // 起点只读：它是整条时间线的锚，改一下它到下一颗之间的间隔
+                    // 就整个变了样，而那段间隔正是这个 App 唯一的证据来源。
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(row.at.formatted(date: .long, time: .shortened))
+                            .monospacedDigit()
+                    }
+                } else {
+                    // 新增时它是**正在被定义**的那个值，所以可改。
+                    eventDatePicker(draft: draft, lowerBound: nil)
+                }
             } else {
                 Picker("上一颗怎么结束的", selection: draft.kind) {
                     ForEach([EventKind.exhausted, .preventive, .faulty], id: \.self) {
@@ -199,11 +230,11 @@ struct DeviceEditorView: View {
                 .pickerStyle(.menu)
                 .labelsHidden()
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
 
-            DatePicker("", selection: draft.at,
-                       displayedComponents: [.date, .hourAndMinute])
-                .labelsHidden()
+                // 下限卡在起点上：不加这个，用户「加一条更早的记录」就能把起点
+                // 顺延走 —— 那是绕过锁定，等于基准值照样被改。
+                eventDatePicker(draft: draft, lowerBound: anchorDate)
+            }
 
             if let audit {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -216,6 +247,23 @@ struct DeviceEditorView: View {
             }
         }
         .padding(.vertical, 2)
+    }
+
+    /// 记录行的时刻选择器。`lowerBound` 传时间线起点时，用户**选不到更早的时刻**。
+    ///
+    /// 两个分支分开写，而不是硬造一个「无限早」的区间去填 `in:` ——
+    /// 那要引入一个语义上根本不存在的边界值，纯属给后人挖坑。
+    @ViewBuilder
+    private func eventDatePicker(draft: Binding<EventDraft>, lowerBound: Date?) -> some View {
+        if let lowerBound {
+            DatePicker("", selection: draft.at, in: lowerBound...,
+                       displayedComponents: [.date, .hourAndMinute])
+                .labelsHidden()
+        } else {
+            DatePicker("", selection: draft.at,
+                       displayedComponents: [.date, .hourAndMinute])
+                .labelsHidden()
+        }
     }
 
     private var notifySection: some View {
@@ -336,7 +384,12 @@ struct DeviceEditorView: View {
 
     private func deleteRows(at offsets: IndexSet) {
         guard orderedRows.count > 1 else { return }   // 至少要留一条，否则时间线没有起点
-        let doomed = offsets.map { orderedRows[$0].id }
+        let anchorID = orderedRows.first?.id
+        let doomed = offsets
+            .map { orderedRows[$0].id }
+            // 双保险：`.deleteDisabled` 已经让起点行滑不出删除按钮，
+            // 这里再挡一次 —— UI 实现换了，基准点也不该被删掉。
+            .filter { $0 != anchorID }
         rows.removeAll { doomed.contains($0.id) }
     }
 

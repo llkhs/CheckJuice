@@ -17,6 +17,13 @@ struct RecordReplacementView: View {
 
     private var device: Device? { appModel.device(withID: deviceID) }
 
+    /// 时间线起点（最早那条记录的时刻）。
+    ///
+    /// 补记的时刻**不能早于它**：那等于在起点之前又插了一次更换，
+    /// 起点会顺延到这条新记录上 —— 而编辑页那边刚把起点锁死，
+    /// 这里放任的话，锁就是个摆设。
+    private var anchorDate: Date? { device?.sortedEvents.first?.at }
+
     /// 用**真实的审计函数**预演一次：编辑页、模型、这里用的是同一套判据，
     /// 不另抄一份阈值（抄一份就等着哪天两边不一致）。
     private var preview: IntervalAudit? {
@@ -33,12 +40,25 @@ struct RecordReplacementView: View {
              + "时刻是不是填错了？"
     }
 
+    /// 时刻选择器。起点存在时给出下限，用户选不到更早的。
+    ///
+    /// 分支写法同上：`DatePicker` 没有「可选范围」的重载，只能 if/else。
+    @ViewBuilder
+    private var timePicker: some View {
+        if let start = anchorDate {
+            DatePicker("新电池装上的时刻", selection: $at, in: start...,
+                       displayedComponents: [.date, .hourAndMinute])
+        } else {
+            DatePicker("新电池装上的时刻", selection: $at,
+                       displayedComponents: [.date, .hourAndMinute])
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    DatePicker("新电池装上的时刻", selection: $at,
-                               displayedComponents: [.date, .hourAndMinute])
+                    timePicker
                 } header: {
                     Text("什么时候换的")
                 } footer: {
