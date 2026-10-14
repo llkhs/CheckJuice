@@ -2,7 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- 必须与 CheckJuice/CheckJuice.entitlements 里的值完全一致。 -->
+	<!-- 与 CheckJuice/CheckJuice.entitlements 保持一致。运行时按实际生效的
+	     entitlements 自动解析，不以此处为准 —— 见 CheckJuiceStore/AppGroup.swift。 -->
 	<key>com.apple.security.application-groups</key>
 	<array>
 		<string>group.com.llkhs.CheckJuice</string>

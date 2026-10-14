@@ -64,9 +64,18 @@ public struct WidgetSnapshot: Codable, Sendable {
     public var generatedAt: Date
     public var devices: [DeviceSnapshot]
 
-    public init(generatedAt: Date, devices: [DeviceSnapshot]) {
+    /// 这份快照是**在哪个 App Group 里**写的。
+    ///
+    /// 存在的理由：如果小组件解析出的组跟主 App 不是同一个，它会去**另一个容器**里
+    /// 读一个不存在的文件 —— 现象是「小组件空着」，**而且什么都不报**。
+    /// 有了这个字段，诊断页能一眼看出「写的是 A 组」，而不是继续猜。
+    /// 可选，所以旧文件照样能解码。
+    public var groupId: String?
+
+    public init(generatedAt: Date, devices: [DeviceSnapshot], groupId: String? = nil) {
         self.generatedAt = generatedAt
         self.devices = devices
+        self.groupId = groupId
     }
 
     public static let empty = WidgetSnapshot(generatedAt: .distantPast, devices: [])

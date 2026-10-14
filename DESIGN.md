@@ -473,8 +473,57 @@ GitHub Actions → archive → exportArchive（p12 + .mobileprovision 手动签�
 小组件正在读的快照内容 / 两个 bundle 各自描述文件里声明的 App Group 清单。
 失败要响，不要静默。
 
-**代码解决不了的部分**：自签用的描述文件里必须真的带这个 App Group。
-免费 Apple ID 没有 App Group 能力 → **这条路本身是死的**，不是配置问题。
+### 6.6 ⭐ 正解：不硬编码标识符，按 entitlements 自动解析
+
+**我在 6.5 里写了一句「这条路本身是死的」——被证伪了，留在这里当反面教材。**
+
+反证：网上随便下的 IPA（例如某个天气 App）自签装上去，APP 里改位置、小组件就跟着变。
+**App Group 在自签环境下完全能用。**
+
+那它们为什么能用？**因为签名工具会把它自己那套 App Group 注入到 bundle 里所有二进制**，
+而这些工具从不硬编码任何标识符 —— 它们用「实际生效的那套」。
+真机诊断输出印证了这点：描述文件给的是 `group.163448086d837d1e.1 … .5`。
+
+**所以错的是「把标识符写死」，不是「自签」。**
+
+#### 怎么拿到「实际生效的那套」
+
+**不要去解析 `.mobileprovision` 文件**（我一开始就是这么想的，绕远了）——进程可以直接问系统：
+
+```swift
+let task = SecTaskCreateFromSelf(nil)
+SecTaskCopyValueForEntitlement(task, "com.apple.security.application-groups" as CFString, nil)
+```
+
+`SecTaskCopyValueForEntitlement` 返回的正是 `containerURL` 要校验的那份 entitlements。
+不用读文件、不受描述文件被删的影响，**App 和小组件用的是同一个 API**。
+
+#### 两边怎么保证选中同一个组
+
+**顺序必须是确定性的**，否则 App 挑 A、小组件挑 B，又是一个「小组件空着」的静默失败：
+
+```
+候选 = [项目声明的] + [本进程 entitlements，字典序] + [描述文件里的，字典序]
+选中 = 第一个 containerURL 不为 nil 的
+```
+
+描述文件那一路是兜底（万一 entitlements 读不出来），而且**两边都能读主 App 的描述文件**
+（小组件跑在 `<App>.app/PlugIns/<Appex>` 里），所以两侧的清单天然一致。
+
+**这个设计的漂亮之处：不需要任何额外的共享存储**。要共享配置得先有共享容器，
+而「用哪个容器」正是待求的未知数 —— 自举问题被确定性算法绕开了。
+
+#### 让失败自己开口（这是本次真正的教训）
+
+静默失败已经咬了两次，所以：
+
+- `WidgetSnapshot.groupId` 记录**这份快照写在哪个组里**；
+- 小组件每次刷新在自己解析到的容器里写一份 `widget_env.json`（谁写的、它认为自己在哪）；
+- 诊断页把**每个候选组挨个翻一遍**，列出有哪些文件、最后是谁写的。
+
+于是「小组件为什么空着」变成一个可以**直接读出答案**的问题，
+而不是再靠三个人猜一轮、重装一轮。
+
 
 ---
 

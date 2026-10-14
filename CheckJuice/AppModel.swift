@@ -149,7 +149,11 @@ final class AppModel {
         let style = displayStyle
         let snapshots = engine.predictions(for: devices, now: now)
             .map { DeviceSnapshot(device: $0.device, prediction: $0.prediction, style: style) }
-        try? snapshotStore.save(WidgetSnapshot(generatedAt: now, devices: snapshots))
+        try? snapshotStore.save(WidgetSnapshot(generatedAt: now,
+                                               devices: snapshots,
+                                               groupId: AppGroup.resolvedIdentifier))
+        // 主 App 也留一张纸条，诊断页才能拿两边的解析结果直接对比。
+        WidgetEnv.writeHere(process: "app")
         WidgetCenter.shared.reloadAllTimelines()
     }
 }

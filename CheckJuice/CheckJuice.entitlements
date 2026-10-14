@@ -3,12 +3,14 @@
 <plist version="1.0">
 <dict>
 	<!--
-	  ⚠️ 这个值必须与描述文件（.mobileprovision）里
-	  com.apple.security.application-groups 列出的某一项**逐字符相同**。
-	  填错 → 主 App 和小组件各自拿到不同容器 → 小组件永远读不到数据。
+	  这里填的是「项目希望用的组」，**但运行时并不以它为准**。
 
-	  当前是占位值，签名阶段按你的描述文件实际内容替换。
-	  两个文件（本文件 + CheckJuiceWidget.entitlements）必须一致。
+	  正式签名（付费账号 / TestFlight）时它生效。
+	  自签时签名工具会把这一项换成它自己那套（如 group.163448086d837d1e.N），
+	  所以运行时改为按「本进程实际生效的 entitlements」自动解析 —— 见
+	  CheckJuiceStore/AppGroup.swift。**别再指望这里填什么就能得到什么。**
+
+	  两个文件（本文件 + CheckJuiceWidget.entitlements）保持一致即可。
 	-->
 	<key>com.apple.security.application-groups</key>
 	<array>

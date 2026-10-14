@@ -20,6 +20,10 @@ struct CheckJuiceProvider: TimelineProvider {
 
     func getTimeline(in context: Context,
                      completion: @escaping (Timeline<CheckJuiceEntry>) -> Void) {
+        // 先留一张「我在哪儿、我看到了什么」的纸条，再干活。
+        // 失败必须留痕：小组件读空时，主 App 的人需要知道是**哪个进程在哪块地方**读空的，
+        // 否则只能继续猜。诊断页会去每个候选组里翻这张纸条。
+        WidgetEnv.writeHere()
         let entry = CheckJuiceEntry(date: Date(), snapshot: SnapshotStore().load())
         // 兜底刷新。正常情况下主 App 一改数据就会 reloadAllTimelines，
         // 这里只是防止 App 长时间没打开导致小组件停在旧值上。
