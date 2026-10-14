@@ -84,12 +84,14 @@ public struct WidgetSnapshot: Codable, Sendable {
 
 /// 快照的读写。主 App 写，Widget 读。
 public struct SnapshotStore: Sendable {
-    private static let fileName = "widget_snapshot.json"
+    /// 公开是为了诊断页能显示**确切的**路径 —— App Group 出错时它会是 nil，
+    /// 而这件事除了「小组件一直空着」以外不带任何提示。
+    public let fileURL: URL?
 
-    private let fileURL: URL?
-
-    public init() {
-        self.fileURL = AppGroup.containerURL?.appendingPathComponent(Self.fileName)
+    /// 可注入的原因同 `DeviceStore`：这份 JSON 是 App 与小组件的契约，
+    /// 必须能在一个临时目录上往返测一遍。
+    public init(fileURL: URL? = AppGroup.snapshotFileURL) {
+        self.fileURL = fileURL
     }
 
     public func load() -> WidgetSnapshot {
@@ -100,7 +102,7 @@ public struct SnapshotStore: Sendable {
     }
 
     public func save(_ snapshot: WidgetSnapshot) throws {
-        guard let fileURL else { return }
+        guard let fileURL else { throw StoreError.appGroupUnavailable }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         try encoder.encode(snapshot).write(to: fileURL, options: .atomic)

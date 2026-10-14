@@ -27,6 +27,7 @@ final class ModelPresetTests: XCTestCase {
             "id", "name", "summary", "config",
             "tauUser", "sigmaMin", "sigmaUnidentified",
             "sigmaPredictionCap", "beta", "z10", "minSamplesForVariance",
+            "sampleFloorHours", "sampleFloorFraction",
         ]
         for key in expected {
             XCTAssertTrue(

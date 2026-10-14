@@ -112,6 +112,49 @@ Kish 有效样本量:  n_eff = (Σwᵢ)² / Σwᵢ²
 加权方差:         s² = Σwᵢ(xᵢ-x̄)² / (Σwᵢ - Σwᵢ²/Σwᵢ)
 ```
 
+### 3.3.1 间隔合理性下限（护栏）⭐
+
+**一次误触能毁掉整个估计，而且不可逆。**
+
+真实事故（2026-10-14 真机测试）：新建物品填「100 天」，添加完顺手点了「已换电池 → 自然耗尽」。
+那条 2 分钟的记录被当成一次**真实寿命观测**吃掉 → 中位寿命从 100 天塌到 **39 分钟** →
+界面立刻显示「耗尽中」。而且样本是**指数加权**的，β=0.7，最新那条权重最大 ——
+等于把整个估计按错误数据重写了一遍。
+
+**判据**：一段间隔短于 `min(sampleFloorHours, sampleFloorFraction × 标称寿命)` 就不计入统计。
+
+| 标称寿命 | 下限 |
+|---|---|
+| 100 天 | `min(1h, 240h)` = **1 小时** |
+| 4 小时 | `min(1h, 0.4h)` = **24 分钟** |
+
+- 取 `min` 而不是固定值，是为了**别误杀真实存在的短周期**：4 小时的电池确实每 3 小时换一次，
+  拿 1 小时当门槛会把它全部丢掉。
+- 下限只挡「荒谬」，**不治「点错」**。60 分钟的间隔照样会被当成真样本 ——
+  所以解药是让用户能填时刻（见下），护栏只是最后一道网。
+
+**配套的两件事（不然护栏只是减轻症状）**
+
+1. **记录时必须能填时刻**。原来的确认框只有一个「自然耗尽」按钮，一律按「此刻」记账。
+   在外面换完电池、过一会儿才想起来记，是常态 —— 全部记成「此刻」等于系统性低估间隔。
+   现在换成一个小表单：**新电池装上的时刻**（默认此刻，可改）+ 上一颗的结束方式。
+2. **编辑页实时显示每段间隔的判定**：样本段标注「这一颗用了 X」，被剔除的标注原因
+   （「只有 18 分钟，短于下限 24 分钟，不计入寿命统计」）。判据与模型**同源** ——
+   编辑页和 `LifetimeModel` 调的是同一个 `auditIntervals`，不另抄一份阈值。
+
+**顺带钉住的不变式**：`Device.sortedEvents` 的最旧一条**恒为 `.initial`**，
+它**只能当间隔起点，不能当终点**（`auditIntervals` 里 `current.kind == .initial` 直接 `continue`）。
+
+⚠️ **别搞反**：`.initial` 那一段间隔**是**真样本。「上次什么时候换的电池」是用户明确告诉我们的
+真实起点，从它到下一次更换的时长完全算数。它被排除的只是**当终点** ——
+「时间线在它之前」发生过什么，我们不知道。
+
+```python
+# reference/lifetime_model.py
+def sample_floor_hours_for(device, cfg=DEFAULT_CONFIG):
+    return min(cfg.sample_floor_hours, cfg.sample_floor_fraction * device.nominal_life_hours)
+```
+
 ### 3.4 后验
 
 ```
@@ -409,6 +452,30 @@ GitHub Actions → archive → exportArchive（p12 + .mobileprovision 手动签�
 - ❌ 免费 Apple ID + 自签 → 7 天掉签 + 无 App Group
 - ❌ 指望 CI 出**未签名** .app 装真机 → 装不上，之前 ThemeToggleApp 就是这么白做的
 
+### 6.5 ⭐ 实测：自签 IPA 的 App Group 一定会丢
+
+**2026-10-14 真机验证**：CI 出的**未签名** IPA 自签装上，App 本体能用，
+**小组件显示「还没有物品」** —— 与 6.4 节的预言一致。
+
+根因是三个环，**每一环都不报错**：
+
+1. **描述文件里没有这个 App Group**。CI 只产未签名 IPA，签名发生在手机上、用**用户自己的**
+   描述文件 —— 里面有没有 `group.com.llkhs.CheckJuice`，跟仓库里写什么毫无关系。
+   （`AppGroup.identifier` 只是「我想要」。）
+   ⚠️ 该文件里原有一句注释说「CI 会从描述文件读出真实值替换，逻辑见 .github/workflows/」——
+   **那是假的**，`.github/workflows/` 从来没这段逻辑，注释已删。
+2. **`containerURL(forSecurityApplicationGroupIdentifier:)` 返回 nil**。
+3. **存储层静默吞掉**（原实现是 `guard let fileURL else { return }`）→
+   「添加物品 → 界面一切正常 → 重启全没了 → 小组件永远空着」，全程零提示。
+
+**已修**：`save` 改抛 `StoreError.appGroupUnavailable`；`AppModel.storageError` 让主页挂红横幅；
+新增**诊断页**（设置 → 排查）摊开：`AppGroup.identifier` / 容器可用性 / 磁盘上真实存在的文件与条数 /
+小组件正在读的快照内容 / 两个 bundle 各自描述文件里声明的 App Group 清单。
+失败要响，不要静默。
+
+**代码解决不了的部分**：自签用的描述文件里必须真的带这个 App Group。
+免费 Apple ID 没有 App Group 能力 → **这条路本身是死的**，不是配置问题。
+
 ---
 
 ## 7. 未来扩展（只留口子，不实现）
@@ -429,8 +496,9 @@ GitHub Actions → archive → exportArchive（p12 + .mobileprovision 手动签�
 明令禁止，且系统没有 JIT。所以「git 上放两套算法代码、App 拉下来跑」这条路是**死的**。
 
 **但是「模型 = 参数」完全可行**：本模型的结构是固定死的（对数正态 + 正态共轭），
-真正会变的只有 7 个数（`tauUser` / `sigmaMin` / `sigmaUnidentified` / `sigmaPredictionCap` /
-`beta` / `z10` / `minSamplesForVariance`）。把这 7 个数组装成 JSON 就是「一套模型」。
+真正会变的只有 9 个数（`tauUser` / `sigmaMin` / `sigmaUnidentified` / `sigmaPredictionCap` /
+`beta` / `z10` / `minSamplesForVariance` / `sampleFloorHours` / `sampleFloorFraction`）。
+把这 9 个数组装成 JSON 就是「一套模型」。
 这跟 Core ML 的权重算「数据」而不算「代码」是同一个道理，不受 2.5.2 限制。
 
 - **格式已定**：`ModelPreset { id, name, summary, config }`，`config` 就是 `ModelConfig` 本身，

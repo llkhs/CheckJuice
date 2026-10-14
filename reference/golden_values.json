@@ -31,6 +31,38 @@
       ],
       "headlineRemaining": "约 35 天",
       "installedAt": "2026-03-28T12:00:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 9600.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 8880.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 7920.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 7200.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 6480.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
       "m": 8.915247102984129,
       "medianHours": 7444.621489934725,
       "medianLineRemaining": "中位 · 约 3 个月",
@@ -62,6 +94,7 @@
       ],
       "headlineRemaining": "约 4 个月",
       "installedAt": "2026-10-14T12:00:00",
+      "intervals": [],
       "m": 9.077951183930438,
       "medianHours": 8760.000000000005,
       "medianLineRemaining": "中位 · 约 12 个月",
@@ -101,6 +134,20 @@
       ],
       "headlineRemaining": "约 3 个月",
       "installedAt": "2026-07-06T12:00:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 7200.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 6960.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
       "m": 8.895717750021483,
       "medianHours": 7300.643325405929,
       "medianLineRemaining": "中位 · 约 6 个月",
@@ -156,6 +203,44 @@
       ],
       "headlineRemaining": "约 3 个月",
       "installedAt": "2026-06-16T12:00:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 7200.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 6960.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 7440.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 1440.0,
+          "reason": "censored",
+          "type": "faulty"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 7080.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 6840.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
       "m": 8.865436675857774,
       "medianHours": 7082.885611211391,
       "medianLineRemaining": "中位 · 约 5 个月",
@@ -199,6 +284,26 @@
       ],
       "headlineRemaining": "约 36 天",
       "installedAt": "2026-03-28T12:00:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 7200.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 6960.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 7440.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
       "m": 8.913805377172334,
       "medianHours": 7433.89612035252,
       "medianLineRemaining": "中位 · 约 3 个月",
@@ -242,6 +347,26 @@
       ],
       "headlineRemaining": "约 17 个月",
       "installedAt": "2025-09-09T12:00:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 28800.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 26400.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 31200.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
       "m": 10.273713929279639,
       "medianHours": 28961.24770418549,
       "medianLineRemaining": "中位 · 约 26 个月",
@@ -262,6 +387,49 @@
       "sigmaWithin": 0.15,
       "urgency": "normal"
     },
+    "misTap": {
+      "ageHours": 0.5,
+      "confidence": "low",
+      "events": [
+        {
+          "at": "2026-10-14T11:28:00",
+          "type": "initial"
+        },
+        {
+          "at": "2026-10-14T11:30:00",
+          "type": "exhausted"
+        }
+      ],
+      "headlineRemaining": "约 40 天",
+      "installedAt": "2026-10-14T11:30:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 0.03333333333333333,
+          "reason": "tooShort",
+          "type": "exhausted"
+        }
+      ],
+      "m": 7.783224016336037,
+      "medianHours": 2400.0000000000005,
+      "medianLineRemaining": "中位 · 约 3 个月",
+      "nEff": 0.0,
+      "nObserved": 0,
+      "name": "误触两分钟",
+      "nominalLifeHours": 2400.0,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2026-11-24T06:06:52.639052",
+      "p10Hours": 978.6146219587956,
+      "p10RemainingHours": 978.1146219588888,
+      "p50ExhaustAt": "2027-01-22T11:30:00",
+      "ratio": 0.0002083333333333333,
+      "referencePrior": null,
+      "remainingHours": 2399.5,
+      "sigmaPost": 0.5,
+      "sigmaPred": 0.7,
+      "sigmaWithin": 0.5,
+      "urgency": "normal"
+    },
     "oneSample": {
       "ageHours": 1440.0,
       "confidence": "low",
@@ -277,6 +445,14 @@
       ],
       "headlineRemaining": "约 4 个月",
       "installedAt": "2026-08-15T12:00:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 7200.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
       "m": 8.93374906707287,
       "medianHours": 7583.64373584684,
       "medianLineRemaining": "中位 · 约 8 个月",
@@ -316,6 +492,20 @@
       ],
       "headlineRemaining": "耗尽中 4 个月",
       "installedAt": "2025-11-18T12:00:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 7200.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 6960.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
       "m": 8.895717750021483,
       "medianHours": 7300.643325405929,
       "medianLineRemaining": "中位 · 耗尽中 25 天",
@@ -363,6 +553,32 @@
       ],
       "headlineRemaining": "约 2 个月",
       "installedAt": "2026-05-17T12:00:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 7200.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 2880.0,
+          "reason": "censored",
+          "type": "preventive"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 6960.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 7440.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
       "m": 8.892009452826745,
       "medianHours": 7273.6205055330565,
       "medianLineRemaining": "中位 · 约 5 个月",
@@ -402,6 +618,20 @@
       ],
       "headlineRemaining": "约 3 个月",
       "installedAt": "2026-07-06T12:00:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 7200.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 6960.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
       "m": 8.87039126611133,
       "medianHours": 7118.065486194442,
       "medianLineRemaining": "中位 · 约 6 个月",
@@ -444,6 +674,20 @@
       ],
       "headlineRemaining": "耗尽中 8 天",
       "installedAt": "2026-03-28T12:00:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 7200.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 6960.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
       "m": 8.895717750021483,
       "medianHours": 7300.643325405929,
       "medianLineRemaining": "中位 · 约 3 个月",
@@ -483,6 +727,20 @@
       ],
       "headlineRemaining": "约 21 天",
       "installedAt": "2026-04-27T12:00:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 7200.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 6960.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
       "m": 8.895717750021483,
       "medianHours": 7300.643325405929,
       "medianLineRemaining": "中位 · 约 4 个月",
@@ -526,6 +784,26 @@
       ],
       "headlineRemaining": "约 4 个月",
       "installedAt": "2026-07-06T12:00:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 7200.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 6720.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 7680.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
       "m": 8.872957356371597,
       "medianHours": 7136.354540356541,
       "medianLineRemaining": "中位 · 约 6 个月",
@@ -545,6 +823,59 @@
       "sigmaPred": 0.21213203435596426,
       "sigmaWithin": 0.15,
       "urgency": "normal"
+    },
+    "tinyBattery": {
+      "ageHours": 0.5,
+      "confidence": "low",
+      "events": [
+        {
+          "at": "2026-10-14T08:12:00",
+          "type": "initial"
+        },
+        {
+          "at": "2026-10-14T08:30:00",
+          "type": "exhausted"
+        },
+        {
+          "at": "2026-10-14T11:30:00",
+          "type": "exhausted"
+        }
+      ],
+      "headlineRemaining": "还剩 1 小时",
+      "installedAt": "2026-10-14T11:30:00",
+      "intervals": [
+        {
+          "floorHours": 0.4,
+          "hours": 0.3,
+          "reason": "tooShort",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 0.4,
+          "hours": 3.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
+      "m": 1.1747634254935813,
+      "medianHours": 3.2373769723775414,
+      "medianLineRemaining": "中位 · 还剩 2 小时",
+      "nEff": 1.0,
+      "nObserved": 1,
+      "name": "四小时电池",
+      "nominalLifeHours": 4.0,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2026-10-14T13:27:03.338986",
+      "p10Hours": 1.9509274961015637,
+      "p10RemainingHours": 1.450927496111111,
+      "p50ExhaustAt": "2026-10-14T14:44:14.557101",
+      "ratio": 0.15444602351415324,
+      "referencePrior": null,
+      "remainingHours": 2.7373769725,
+      "sigmaPost": 0.2572478777137633,
+      "sigmaPred": 0.3951916884098593,
+      "sigmaWithin": 0.3,
+      "urgency": "stockUp"
     },
     "tinyIntervals": {
       "ageHours": 24.0,
@@ -569,6 +900,26 @@
       ],
       "headlineRemaining": "约 3 天",
       "installedAt": "2026-10-13T12:00:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 120.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 144.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 96.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
       "m": 4.957473223343099,
       "medianHours": 142.2339480411358,
       "medianLineRemaining": "中位 · 约 4 天",
@@ -608,6 +959,20 @@
       ],
       "headlineRemaining": "约 3 个月",
       "installedAt": "2026-07-16T12:00:00",
+      "intervals": [
+        {
+          "floorHours": 1.0,
+          "hours": 7200.0,
+          "reason": "sample",
+          "type": "exhausted"
+        },
+        {
+          "floorHours": 1.0,
+          "hours": 6720.0,
+          "reason": "sample",
+          "type": "exhausted"
+        }
+      ],
       "m": 8.878307277315683,
       "medianHours": 7174.635782479924,
       "medianLineRemaining": "中位 · 约 6 个月",

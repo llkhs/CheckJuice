@@ -95,8 +95,21 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
     }
 
     /// 按时间升序排列的事件。
+    ///
+    /// **不变式：最旧的那条一定是 `.initial`。** 用户可能在编辑页把某条记录改到更早、
+    /// 或删掉最旧的一条，与其让每个调用点各自记得处理，不如在这里兜住。
+    ///
+    /// ⚠️ **别把它的作用搞反**：`.initial` **只能当间隔起点，不能当终点**
+    /// （`auditIntervals` 里 `current.kind == .initial` 直接 `continue`）。
+    /// 它到下一次更换的那段间隔**是**真样本 —— 「上次什么时候换的电池」是用户
+    /// 明确告诉我们的真实起点，从它算起的时长完全算数。这一点是冷启动的第一份证据，
+    /// 丢掉它等于让「填写历史更换时间」这个功能白做。
     public var sortedEvents: [ReplacementEvent] {
-        events.sorted { $0.at < $1.at }
+        var ordered = events.sorted { $0.at < $1.at }
+        if let first = ordered.first, first.kind != .initial {
+            ordered[0].kind = .initial
+        }
+        return ordered
     }
 
     /// 当前这颗电池的起算时刻 = 最后一次事件的时刻。

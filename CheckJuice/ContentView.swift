@@ -14,69 +14,61 @@ extension Urgency {
     }
 }
 
-/// 「已经用了多久」。纯显示换算放 UI 层，Core 只认小时。
-/// 阈值跟 `Prediction` 里那套保持一致：≥60 天说月，≥2 天说天，否则说小时。
-private func elapsedText(_ hours: Double) -> String {
-    let days = hours / 24
-    if days >= 60 { return "已用 \(Int(days / 30)) 个月" }
-    if days >= 2 { return "已用 \(Int(days)) 天" }
-    return "已用 \(Int(hours)) 小时"
-}
-
+/// 「已经用了多久」。量级换算（≥60 天说月 / ≥2 天说天 / 否则说小时）
+/// 统一在 `DurationText` 里，别在这儿再抄一份阈值。
 struct ContentView: View {
     @Environment(AppModel.self) private var model
     @State private var showingAdd = false
     @State private var showingSettings = false
-    /// 待确认「这次是哪种情况」的设备。非 nil 就弹询问框。
-    @State private var replacementCandidate: Device?
 
-    // MARK: - 换电池时的「哪种情况」预选
+    /// 滑动「已换电池」后待记账的那台。**存 id 不存 `Device` 值** ——
+    /// 值快照会过期，表单却是异步弹出来的。
+    @State private var replacementTarget: ReplacementTarget?
 
-    /// 判据：已经越过 P10 耗尽时刻 → 多半是自然耗尽；还没到 → 多半是提前换的。
-    /// 这只是**预选**，用户永远能改。用 P10（最坏情况）而不是中位数当分界，
-    /// 是因为这个 App 的整个立场就是「按最坏情况准备」。
-    private func likelyEventKind(for device: Device) -> EventKind {
-        let item = model.ranked.first { $0.device.id == device.id }
-        guard let item else { return .exhausted }
-        return Date() >= item.prediction.p10ExhaustAt ? .exhausted : .preventive
-    }
-
-    private func replacementOptions(for device: Device) -> [EventKind] {
-        let likely = likelyEventKind(for: device)
-        return [likely] + [EventKind.exhausted, .preventive, .faulty].filter { $0 != likely }
-    }
-
-    private var replacementTitle: String {
-        guard let device = replacementCandidate else { return "这次是哪种情况？" }
-        return "这次是哪种情况？（按预测，多半是「\(likelyEventKind(for: device).displayName)」）"
-    }
+    /// `.sheet(item:)` 要一个 Identifiable 包装：直接用 `UUID?` 的话，
+    /// 关闭时把 state 置 nil 会让内容在整个收起动画里先消失。
+    private struct ReplacementTarget: Identifiable { let id: UUID }
 
     var body: some View {
         NavigationStack {
             List {
+                if let storageError = model.storageError {
+                    Section {
+                        Label {
+                            Text(storageError)
+                                .font(.footnote)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                        }
+                        .foregroundStyle(.red)
+                    }
+                }
+
                 ForEach(model.ranked) { item in
-                    DeviceRow(
-                        item: item,
-                        style: model.displayStyle,
-                        showMedian: model.showMedianSubline
-                    )
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                            Button(role: .destructive) {
-                                model.delete(item.device)
-                            } label: {
-                                Label("删除", systemImage: "trash")
-                            }
+                    NavigationLink {
+                        DeviceEditorView(editingID: item.device.id)
+                    } label: {
+                        DeviceRow(
+                            item: item,
+                            style: model.displayStyle,
+                            showMedian: model.showMedianSubline
+                        )
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            model.delete(id: item.device.id)
+                        } label: {
+                            Label("删除", systemImage: "trash")
                         }
-                        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                            Button {
-                                // 不直接落库：先问一句「没电了还是提前换的」。
-                                // 这一句不能省 —— 提前换的那次不能算寿命样本。
-                                replacementCandidate = item.device
-                            } label: {
-                                Label("已换电池", systemImage: "arrow.triangle.2.circlepath")
-                            }
-                            .tint(.blue)
+                    }
+                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                        Button {
+                            replacementTarget = ReplacementTarget(id: item.device.id)
+                        } label: {
+                            Label("已换电池", systemImage: "arrow.triangle.2.circlepath")
                         }
+                        .tint(.blue)
+                    }
                 }
             }
             .overlay {
@@ -105,29 +97,12 @@ struct ContentView: View {
                     }
                 }
             }
-            .confirmationDialog(
-                replacementTitle,
-                isPresented: Binding(
-                    get: { replacementCandidate != nil },
-                    set: { if !$0 { replacementCandidate = nil } }
-                ),
-                titleVisibility: .visible,
-                presenting: replacementCandidate
-            ) { device in
-                // 最可能的那种排最前。iOS 的 confirmationDialog 没有「默认项高亮」，
-                // 所以「预选」这件事靠排序 + 标题里点名两处一起表达。
-                ForEach(replacementOptions(for: device), id: \.self) { kind in
-                    Button(kind.displayName) {
-                        model.markReplaced(device, kind: kind)
-                    }
-                }
-                Button("取消", role: .cancel) {}
-            } message: { _ in
-                Text("只有「自然耗尽」算寿命样本。提前换那次要是也算进去，"
-                     + "模型会以为电池只能撑这么久，越预测越短。")
+            .sheet(item: $replacementTarget) { target in
+                RecordReplacementView(deviceID: target.id)
             }
             .sheet(isPresented: $showingAdd) {
-                AddDeviceView { device in model.add(device) }
+                // 推入导航栈时外面已经有栈了，弹 sheet 得自己包一层。
+                NavigationStack { DeviceEditorView(editingID: nil) }
             }
             .sheet(isPresented: $showingSettings) {
                 SettingsView(
@@ -157,7 +132,7 @@ struct DeviceRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.device.name)
                     .font(.headline)
-                Text(elapsedText(item.prediction.ageHours))
+                Text("已用 " + DurationText.short(item.prediction.ageHours))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -181,132 +156,3 @@ struct DeviceRow: View {
     }
 }
 
-/// 「大概能用多久」的输入单位。
-///
-/// 让人填「1095 小时」是耍流氓，填「1095 天」也够呛。给天和月两个量级就够——
-/// 一个月按 30 天算，跟显示层（`Prediction.adaptiveHours`）用同一个常数。
-enum LifeUnit: String, CaseIterable, Identifiable {
-    case days = "天"
-    case months = "个月"
-    var id: String { rawValue }
-    var hours: Double { self == .days ? 24 : 720 }
-}
-
-struct AddDeviceView: View {
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var name = ""
-
-    /// 用户填的「大概能用多久」—— 模型唯一的冷启动先验。
-    @State private var lifeAmount = 30.0
-    @State private var lifeUnit: LifeUnit = .days
-
-    /// 装上这颗电池的**时刻**，不是日期。默认「现在」—— 用户通常是刚换完才来记一笔。
-    /// 精确到分钟是有意义的：一块撑 4 天的纽扣电池，早上 8 点装和晚上 8 点装上，
-    /// 差出来的 12 小时是它总寿命的八分之一。
-    @State private var installedAt = Date()
-
-    /// 可留空：这一颗**也已经换掉了**的时刻。
-    /// 填上它，模型立刻拿到一个真实寿命区间，而不是只靠你拍脑袋的估计值。
-    @State private var hasNextReplacement = false
-    @State private var nextReplacementAt = Date()
-
-    /// 提前多久提醒备货。UI 用「天」（人脑里想的是「提前两周」），提交时换算成小时。
-    @State private var notifyLeadDays = 14
-
-    let onAdd: (Device) -> Void
-
-    private var nominalLifeHours: Double { lifeAmount * lifeUnit.hours }
-
-    private var canSubmit: Bool { lifeAmount > 0 }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("这是什么") {
-                    TextField("名称，例如「大门门锁」", text: $name)
-                }
-
-                Section("电池能撑多久") {
-                    HStack {
-                        TextField("大概", value: $lifeAmount, format: .number)
-                            .keyboardType(.decimalPad)
-                        Picker("单位", selection: $lifeUnit) {
-                            ForEach(LifeUnit.allCases) { unit in
-                                Text(unit.rawValue).tag(unit)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        .frame(width: 140)
-                    }
-                    if nominalLifeHours > 0 {
-                        Text("≈ \(Int(nominalLifeHours.rounded())) 小时")
-                            .font(.footnote)
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section("计时起点") {
-                    DatePicker(
-                        "本次装上电池的时刻",
-                        selection: $installedAt,
-                        displayedComponents: [.date, .hourAndMinute]
-                    )
-                }
-
-                Section("下一次更换（可留空）") {
-                    Toggle("这一颗也已经换掉了", isOn: $hasNextReplacement)
-                    if hasNextReplacement {
-                        DatePicker(
-                            "换上的时刻",
-                            selection: $nextReplacementAt,
-                            in: installedAt...,
-                            displayedComponents: [.date, .hourAndMinute]
-                        )
-                    }
-                }
-
-                Section("提醒") {
-                    Stepper("提前 \(notifyLeadDays) 天提醒", value: $notifyLeadDays, in: 1...180)
-                }
-
-                Section {
-                    Text("第 1 颗电池没有实测数据，预测只能靠你填的「大概寿命」撑场面，"
-                         + "最坏情况可能只有你估值的四成。等它耗尽、你记下一次更换之后，预测会明显变准。")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("添加物品")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("添加") {
-                        onAdd(buildDevice())
-                        dismiss()
-                    }
-                    .disabled(!canSubmit)
-                }
-            }
-        }
-    }
-
-    private func buildDevice() -> Device {
-        var events = [ReplacementEvent(at: installedAt, kind: .initial)]
-        // 留空 = 这一颗还在用。填了才算一个已结束的周期。
-        if hasNextReplacement, nextReplacementAt > installedAt {
-            events.append(ReplacementEvent(at: nextReplacementAt, kind: .exhausted))
-        }
-        return Device(
-            name: name.isEmpty ? "未命名" : name,
-            nominalLifeHours: nominalLifeHours,
-            events: events,
-            notifyLeadHours: Double(notifyLeadDays) * 24.0
-        )
-    }
-}

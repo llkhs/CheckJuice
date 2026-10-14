@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 from lifetime_model import (  # noqa: E402
     DEFAULT_CONFIG, Device, ReplacementEvent, EXHAUSTED, FAULTY, INITIAL,
-    PREVENTIVE, predict, format_remaining_short,
+    PREVENTIVE, audit_intervals, predict, format_remaining_short,
 )
 
 D = 24.0                              # 一天多少小时，仅为让下面的场景定义保持可读
@@ -63,6 +63,13 @@ CASES = {
     # 紧急度分级覆盖：确认「该备货」看的是**距风险窗口**的距离，而不是距中位时刻
     "stockUpWindow":  dev("该备货", 8760.0, [300*D, 290*D], 170*D, notify_lead_hours=30*D),
     "riskWindow":     dev("已入风险窗口", 8760.0, [300*D, 290*D], 200*D),
+    # ── 间隔护栏 ────────────────────────────────────────────────────────
+    # 真实事故：用户填 100 天，添加后 2 分钟点「自然耗尽」，模型把这 2 分钟
+    # 当成真实寿命观测，中位寿命从 100 天塌到 39 分钟。这两条用例把它钉死。
+    "misTap":         dev("误触两分钟", 2400.0, [2/60.0], 0.5),
+    # 4 小时电池：下限放宽到 24 分钟，所以 18 分钟那段【不】算（低于下限），
+    # 而 3 小时那段算 —— 证明自适应下限没有误杀真实的短周期。
+    "tinyBattery":    dev("四小时电池", 4.0, [0.3, 3.0], 0.5),
 }
 
 
@@ -75,7 +82,6 @@ def main():
             "nominalLifeHours": d.nominal_life_hours,
             "installedAt": d.installed_at.isoformat(),
             "notifyLeadHours": d.notify_lead_hours,
-            "nominalLifeHours": d.nominal_life_hours,
             "referencePrior": ({"logMedian": d.ref_prior[0], "tau": d.ref_prior[1]}
                                if d.ref_prior else None),
             "events": [{"at": e.at.isoformat(), "type": e.type} for e in
@@ -101,6 +107,17 @@ def main():
             # 取整方向差一个单位、单位阈值差一格，这里就会红。
             "headlineRemaining": format_remaining_short(p.p10_remaining_hours),
             "medianLineRemaining": "中位 · " + format_remaining_short(p.remaining_hours),
+            # 每一段间隔的判定结果：进了统计没有、为什么。
+            # Swift 的 auditIntervals 必须逐条对上，否则界面会给错误的记录打标。
+            "intervals": [
+                {
+                    "hours": a.hours,
+                    "type": a.type,
+                    "reason": a.reason,
+                    "floorHours": a.floor_hours,
+                }
+                for a in audit_intervals(d, DEFAULT_CONFIG)
+            ],
         }
     # 保留完整精度：json 用 repr 输出 float
     txt = json.dumps(out, indent=2, ensure_ascii=False, sort_keys=True)

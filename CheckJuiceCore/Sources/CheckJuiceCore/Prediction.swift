@@ -223,20 +223,7 @@ public extension Prediction {
     /// 与 Python 的 `format_remaining_short` 必须逐字符一致（黄金数值会断言）。
     static func adaptiveHours(_ hours: Double) -> String {
         let h = LifetimeModel.wholeHours(hours)
-        let magnitude = abs(h)
-
-        let count: Int
-        let unit: String
-        if magnitude >= 1440 {
-            count = magnitude / 720        // 一个月按 30 天算
-            unit = "个月"
-        } else if magnitude >= 48 {
-            count = magnitude / 24
-            unit = "天"
-        } else {
-            count = magnitude
-            unit = "小时"
-        }
+        let (count, unit) = DurationText.magnitudeSplit(h)
 
         if h < 0 {
             return "耗尽中 \(count) \(unit)"   // 耗尽已是既成事实，不加「约」

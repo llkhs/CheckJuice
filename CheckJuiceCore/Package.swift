@@ -22,7 +22,7 @@ let package = Package(
         .target(name: "CheckJuiceStore", dependencies: ["CheckJuiceCore"]),
         .testTarget(
             name: "CheckJuiceCoreTests",
-            dependencies: ["CheckJuiceCore"],
+            dependencies: ["CheckJuiceCore", "CheckJuiceStore"],
             resources: [.process("Resources")]
         ),
     ]

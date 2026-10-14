@@ -26,6 +26,13 @@ final class AppModel {
 
     var devices: [Device] = []
 
+    /// 落盘出问题时的人话原因。非 nil 就在主页顶上挂一条红横幅。
+    ///
+    /// 存在的理由：`DeviceStore.save` 以前在容器为空时静默返回成功，
+    /// 结果「添加物品 → 界面一切正常 → 重启全没了 → 小组件一直空着」，
+    /// 全程一个字都不报。这种失败方式不可接受，必须响。
+    var storageError: String?
+
     /// 用户在设置页选的主文案样式（「耗尽时刻」/「剩余时长」）。
     ///
     /// 持久化交给 `DisplaySettings`（App Group 共享域）—— 见那边的注释：
@@ -37,6 +44,8 @@ final class AppModel {
 
     init() {
         devices = deviceStore.load()
+        // 启动时也要判一次，不然只有「下一次 commit」才会发现容器是空的。
+        if !AppGroup.isAvailable { storageError = AppGroup.unavailableMessage }
         reloadWidget()
     }
 
@@ -84,23 +93,49 @@ final class AppModel {
         commit()
     }
 
-    /// 记一次更换。默认是「自然耗尽」（有效寿命样本）；
-    /// 提前更换 / 故障请显式传 `kind`，否则会污染寿命统计。
-    func markReplaced(_ device: Device, kind: EventKind = .exhausted) {
+    /// 记一次更换。`at` 是**新电池装上来的时刻**（默认此刻）；
+    /// `kind` 描述的是**上一颗**是怎么结束的 —— 自然耗尽才算有效寿命样本，
+    /// 提前更换 / 故障请显式传 `kind`，否则会污染统计。
+    func markReplaced(_ device: Device, at: Date = Date(), kind: EventKind = .exhausted) {
         guard let index = devices.firstIndex(where: { $0.id == device.id }) else { return }
-        devices[index].events.append(ReplacementEvent(at: Date(), kind: kind))
+        devices[index].events.append(ReplacementEvent(at: at, kind: kind))
         commit()
     }
 
-    func delete(_ device: Device) {
-        devices.removeAll { $0.id == device.id }
+    /// 覆盖一台已有设备（编辑页保存）。按 id 定位，不在库里就什么都不做。
+    func update(_ device: Device) {
+        guard let index = devices.firstIndex(where: { $0.id == device.id }) else { return }
+        devices[index] = device
+        commit()
+    }
+
+    /// 按 id 取当前设备。
+    ///
+    /// 导航目标是 **id 不是 `Device` 值**：值快照会过期 —— 比如编辑页开着的时候，
+    /// 小组件里刚记了一次更换，拿着旧快照保存就会把它抹掉。
+    func device(withID id: UUID) -> Device? {
+        devices.first { $0.id == id }
+    }
+
+    func delete(id: UUID) {
+        devices.removeAll { $0.id == id }
         commit()
     }
 
     // MARK: - 落盘
 
     private func commit() {
-        try? deviceStore.save(devices)
+        if !AppGroup.isAvailable {
+            // 不吞掉：这是「界面一切正常、重启全没了」的唯一线索。
+            storageError = AppGroup.unavailableMessage + "（设置页 → 诊断 看详情）"
+        } else {
+            do {
+                try deviceStore.save(devices)
+                storageError = nil
+            } catch {
+                storageError = "写入失败：" + error.localizedDescription
+            }
+        }
         reloadWidget()
     }
 

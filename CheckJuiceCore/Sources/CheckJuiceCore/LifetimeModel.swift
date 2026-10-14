@@ -113,25 +113,62 @@ public struct LifetimeModel {
     public func observedIntervals(
         _ device: Device
     ) -> (exhausted: [Double], censored: [(hours: Double, kind: EventKind)]) {
-        let events = device.sortedEvents
         var exhausted: [Double] = []
         var censored: [(hours: Double, kind: EventKind)] = []
-        guard events.count >= 2 else { return (exhausted, censored) }
+        for audit in Self.auditIntervals(for: device, config: config) {
+            switch audit.reason {
+            case .sample:   exhausted.append(audit.hours)
+            case .censored: censored.append((audit.hours, audit.kind))
+            case .tooShort: break
+            }
+        }
+        return (exhausted, censored)
+    }
+
+    /// 把事件序列逐段判定，返回每一段间隔的完整审计结果。
+    ///
+    /// 这是间隔提取的**唯一真相源**：``observedIntervals(_:)`` 只是它的一个投影，
+    /// 界面也用它来给每条更换记录打「未计入统计」的标。
+    ///
+    /// 独立成静态方法，是因为编辑页要在**尚未保存**的草稿设备上也算一遍 ——
+    /// 那时还没有 `LifetimeModel` 实例，用法必须是 `LifetimeModel.auditIntervals(for:)`。
+    public static func auditIntervals(
+        for device: Device,
+        config: ModelConfig = .standard
+    ) -> [IntervalAudit] {
+        let events = device.sortedEvents
+        guard events.count >= 2 else { return [] }
+
+        let floor = config.sampleFloor(for: device)
+        var result: [IntervalAudit] = []
 
         for index in 1..<events.count {
             let previous = events[index - 1]
             let current = events[index]
-            let hours = Self.hoursBetween(from: previous.at, to: current.at)
-            guard hours > 0 else { continue }
+            let hours = hoursBetween(from: previous.at, to: current.at)
 
-            if current.kind.countsAsLifetimeSample {
-                exhausted.append(hours)
+            let reason: IntervalReason
+            if hours <= 0 {
+                // 时间倒挂 / 同一时刻：事件本身保留（起算点照走），但它显然不是一段寿命。
+                reason = .tooShort
+            } else if hours < floor {
+                reason = .tooShort
+            } else if current.kind.countsAsLifetimeSample {
+                reason = .sample
             } else if current.kind.isCensored {
-                censored.append((hours, current.kind))
+                reason = .censored
+            } else {
+                continue  // .initial 不作为间隔终点，忽略。
             }
-            // .initial 不作为间隔终点，忽略。
+
+            result.append(
+                IntervalAudit(
+                    start: previous.at, end: current.at, hours: hours,
+                    kind: current.kind, reason: reason, floorHours: floor
+                )
+            )
         }
-        return (exhausted, censored)
+        return result
     }
 
     // MARK: - 加权统计

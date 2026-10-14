@@ -72,8 +72,33 @@ class ModelConfig:
     z10: float = 1.2815515655446004    # 标准正态 P10 分位
     min_samples_for_variance: int = 3  # 至少 3 个有效间隔才敢相信样本方差
 
+    # ── 间隔合理性下限（护栏）─────────────────────────────────────────
+    # 真实案例：用户填「100 天」，添加后 2 分钟就点了「自然耗尽」，
+    # 模型把这 2 分钟当成一次真实寿命观测 —— 它带着 11 倍于先验的精度权重，
+    # 后验中位寿命从 100 天直接塌到 39 分钟。
+    #
+    # 一段间隔短于下限，说明它不可能是「一颗电池的真实寿命」，
+    # 只能是误触 / 修正 / 测试。这类间隔**不进寿命统计，但照样重置起算点**
+    # （当时确实装上了新电池）。
+    sample_floor_hours: float = 1.0        # 绝对上限：不足 1 小时必然是误触
+    sample_floor_fraction: float = 0.10    # 相对标称寿命的比例
+
 
 DEFAULT_CONFIG = ModelConfig()
+
+
+def sample_floor_hours_for(device: "Device", cfg: ModelConfig = DEFAULT_CONFIG) -> float:
+    """这台设备的「间隔太短」下限。**单位：小时。**
+
+    取 ``min(绝对上限, 标称寿命 × 比例)``：
+
+    * 100 天的电池 → ``min(1h, 240h)`` = **1 小时**
+    * 4 小时的电池 → ``min(1h, 24min)`` = **24 分钟**（放宽，别把真实的短周期当垃圾）
+
+    纯绝对阈值会把 4 小时电池的真实周期误杀，所以对极短寿命的设备按比例放宽。
+    """
+    nominal = max(device.nominal_life_hours, 1.0)
+    return min(cfg.sample_floor_hours, cfg.sample_floor_fraction * nominal)
 
 
 #: 默认提前量：距风险窗口开启不足这么多小时 → 该备货。
@@ -164,28 +189,78 @@ class Prediction:
 
 # ════════════════════════════════════════════════════════════ 4. 观测提取
 
+#: 间隔的判定结果
+INTERVAL_SAMPLE    = "sample"     # 计入寿命统计
+INTERVAL_CENSORED  = "censored"   # 截尾观测（预防性更换 / 故障），不进统计
+INTERVAL_TOO_SHORT = "tooShort"   # 间隔短得不可能是真实寿命 → 不进统计
+
+
+@dataclass(frozen=True)
+class IntervalAudit:
+    """一段相邻更换间隔的判定结果。**单位：小时。**
+
+    存在的意义是让「哪几段进了统计、为什么没进」变成**可显示的事实**，
+    而不是藏在模型里的黑盒 —— 界面要靠它给每条记录打标。
+    """
+    start: datetime
+    end: datetime
+    hours: float
+    type: str          # 终点事件的类型，即「上一颗电池是怎么结束的」
+    reason: str        # INTERVAL_* 之一
+    floor_hours: float  # 判定时用的下限（方便界面解释「为什么不算」）
+
+    @property
+    def counted(self) -> bool:
+        return self.reason == INTERVAL_SAMPLE
+
+
+def audit_intervals(device: Device, cfg: ModelConfig = DEFAULT_CONFIG) -> list[IntervalAudit]:
+    """把事件序列逐段判定，返回每一段间隔的完整审计结果。
+
+    这是间隔提取的**唯一真相源**：``observed_intervals`` 只是它的一个投影，
+    界面也用它来给记录打「未计入统计」的标。
+
+    判定优先级：间隔过短 > 截尾 > 有效样本。
+    （一段 2 分钟的「预防性更换」也是过短，报过短更准确。）
+    """
+    events = sorted(device.events, key=lambda e: e.at)
+    floor = sample_floor_hours_for(device, cfg)
+    out: list[IntervalAudit] = []
+
+    for prev, cur in zip(events, events[1:]):
+        hours = hours_between(prev.at, cur.at)
+        if hours <= 0:
+            # 时间倒挂 / 同一时刻，事件本身保留（起算点照走），但它显然不是一段寿命
+            out.append(IntervalAudit(prev.at, cur.at, hours, cur.type, INTERVAL_TOO_SHORT, floor))
+            continue
+        if hours < floor:
+            reason = INTERVAL_TOO_SHORT
+        elif cur.type == EXHAUSTED:
+            reason = INTERVAL_SAMPLE
+        elif cur.type in CENSORED_TYPES:
+            reason = INTERVAL_CENSORED
+        else:
+            continue  # INITIAL 不作为间隔终点
+        out.append(IntervalAudit(prev.at, cur.at, hours, cur.type, reason, floor))
+    return out
+
+
 def observed_intervals(device: Device) -> tuple[list[float], list[tuple[float, str]]]:
     """把事件序列拆成 (有效间隔, 截尾间隔)。**单位：小时。**
 
-    * 有效间隔：终点事件为 ``exhausted`` → 计入寿命统计
+    * 有效间隔：终点事件为 ``exhausted`` **且长度过得了护栏** → 计入寿命统计
     * 截尾间隔：终点事件为 ``preventive`` / ``faulty`` → **剔除出寿命统计**
 
     注意：截尾观测虽不进统计，但它**照样重置了起算点**——
     因为当时确实装上了新电池。这是最容易做错的地方。
     """
-    events = sorted(device.events, key=lambda e: e.at)
     exhausted: list[float] = []
     censored: list[tuple[float, str]] = []
-
-    for prev, cur in zip(events, events[1:]):
-        hours = hours_between(prev.at, cur.at)
-        if hours <= 0:
-            continue
-        if cur.type == EXHAUSTED:
-            exhausted.append(hours)
-        elif cur.type in CENSORED_TYPES:
-            censored.append((hours, cur.type))
-        # INITIAL 不作为间隔终点，忽略
+    for a in audit_intervals(device):
+        if a.reason == INTERVAL_SAMPLE:
+            exhausted.append(a.hours)
+        elif a.reason == INTERVAL_CENSORED:
+            censored.append((a.hours, a.type))
     return exhausted, censored
 
 

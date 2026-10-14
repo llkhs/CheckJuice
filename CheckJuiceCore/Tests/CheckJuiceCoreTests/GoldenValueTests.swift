@@ -43,6 +43,16 @@ final class GoldenValueTests: XCTestCase {
         /// 放进黄金文件是为了让取整口径、单位阈值的跨语言漂移也能被 CI 抓住。
         var headlineRemaining: String
         var medianLineRemaining: String
+        /// 每一段间隔的判定结果。Swift 的 `auditIntervals` 必须逐条对上，
+        /// 否则界面会给错误的记录打「未计入统计」的标。
+        var intervals: [GoldenInterval]
+    }
+
+    private struct GoldenInterval: Decodable {
+        var hours: Double
+        var type: String
+        var reason: String
+        var floorHours: Double
     }
 
     private struct GoldenEvent: Decodable {
@@ -172,6 +182,17 @@ final class GoldenValueTests: XCTestCase {
                            "[\(key)] headlineRemaining")
             XCTAssertEqual(prediction.medianText(style: .remaining), gold.medianLineRemaining,
                            "[\(key)] medianLineRemaining")
+
+            // --- 间隔审计：哪几段进了统计、为什么没进 ---
+            let audits = LifetimeModel.auditIntervals(for: device)
+            XCTAssertEqual(audits.count, gold.intervals.count, "[\(key)] 间隔段数")
+            for (audit, gold_) in zip(audits, gold.intervals) {
+                assertClose(audit.hours, gold_.hours, "[\(key)] 间隔时长")
+                assertClose(audit.floorHours, gold_.floorHours, "[\(key)] 间隔下限")
+                XCTAssertEqual(audit.kind.rawValue, gold_.type, "[\(key)] 间隔终点类型")
+                XCTAssertEqual(audit.reason.rawValue, gold_.reason,
+                               "[\(key)] 间隔判定（\(gold_.hours) 小时）")
+            }
         }
     }
 

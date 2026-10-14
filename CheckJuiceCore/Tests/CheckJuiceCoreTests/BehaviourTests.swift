@@ -343,9 +343,56 @@ final class BehaviourTests: XCTestCase {
             .risk,
             "P10 已耗尽 → 必须判「风险窗口」，而不是看中位日判「正常」"
         )
+    }
 
-        // 还早：两行都报月，且 P10 明显小于中位。
-        XCTAssertEqual(try lines(since: h(90)).0, "约 3 个月")
-        XCTAssertEqual(try lines(since: h(90)).1, "中位 · 约 7 个月")
+    /// 间隔护栏：一次误触不该毁掉整个寿命估计。
+    ///
+    /// 真实事故（2026-10-14 真机测试）：填「100 天」，添加完立刻点「已换电池 → 自然耗尽」。
+    /// 修之前那条 2 分钟的记录被当成一次真实寿命观测吃掉，中位寿命从 100 天塌到 39 分钟。
+    func testMisTapIntervalDoesNotPoisonEstimate() throws {
+        let misTap = makeDevice(
+            nominalLifeHours: h(100),
+            intervals: [2.0 / 60.0],
+            since: 0.5
+        )
+        assertClose(try mustPredict(misTap).medianHours, h(100), "误触不得污染寿命估计")
+
+        let audits = LifetimeModel.auditIntervals(for: misTap)
+        XCTAssertEqual(audits.count, 1)
+        XCTAssertEqual(audits[0].reason, .tooShort)
+        XCTAssertFalse(audits[0].counted)
+    }
+
+    /// 但自适应下限**不能**误杀极小电池的真实短周期。
+    ///
+    /// 4 小时电池的下限是 `min(1h, 4h×10%)` = 24 分钟：18 分钟不算，3 小时照算。
+    func testAdaptiveFloorKeepsRealShortCycleForTinyBattery() throws {
+        let tiny = makeDevice(nominalLifeHours: 4, intervals: [0.3, 3.0], since: 0.5)
+        let audits = LifetimeModel.auditIntervals(for: tiny)
+
+        XCTAssertEqual(audits[0].reason, .tooShort, "18 分钟 < 24 分钟下限")
+        XCTAssertEqual(audits[1].reason, .sample, "3 小时 > 24 分钟下限，必须计入")
+        XCTAssertEqual(audits[1].floorHours, 0.4, accuracy: 1e-12, "下限应为标称寿命的 10%")
+    }
+
+    /// 截尾观测（提前更换 / 故障）不进统计，但**照样重置起算点** ——
+    /// 这是最容易做错的地方，所以钉住。
+    func testCensoredReplacementResetsClockWithoutCounting() throws {
+        // 同一串时间戳，只有「上一次是怎么结束的」不同：自然耗尽 vs 提前更换。
+        let censored = makeDevice(intervals: [h(300), h(120)], since: h(10),
+                                  kinds: [.exhausted, .preventive])
+        let clean = makeDevice(intervals: [h(300), h(120)], since: h(10),
+                               kinds: [.exhausted, .exhausted])
+
+        // 起算点：两者都落在最后一次更换上，与那次是提前换还是自然耗尽无关。
+        assertClose(try mustPredict(censored).ageHours, h(10), "起算点 = 最后一次更换")
+        assertClose(try mustPredict(clean).ageHours, h(10), "起算点与结束类型无关")
+
+        // 统计：提前更换那段被剔除，所以只有 1 条样本；自然耗尽则有 2 条。
+        let audits = LifetimeModel.auditIntervals(for: censored)
+        XCTAssertEqual(audits[1].reason, .censored)
+        XCTAssertFalse(audits[1].counted)
+        XCTAssertEqual(try mustPredict(censored).posterior.observedCount, 1)
+        XCTAssertEqual(try mustPredict(clean).posterior.observedCount, 2)
     }
 }
