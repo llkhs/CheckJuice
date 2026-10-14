@@ -94,8 +94,13 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
     /// 而这多半跟一次换电池周期有关。30 天太长、7 天太短。
     public static let trashRetentionDays: Double = 15
 
-    /// 默认提前量：336 小时 = 14 天。留出快递 / 出门采购的时间。
-    public static let defaultNotifyLeadHours: Double = 336
+    /// 新物品的默认提前量：**4 小时**。
+    ///
+    /// 原来写的是 336（14 天）—— 那个值默认的是「上网下单、等快递」的场景。
+    /// 但这个 App 真正被盯的是**短命电池**（几小时到几天），用户多半是从抽屉里
+    /// 摸一颗就换上，4 小时对应的是「出门前先看一眼够不够撑完这一趟」。
+    /// 长寿命设备（烟感那种一年一颗的）在编辑页把单位切到「天」就行。
+    public static let defaultNotifyLeadHours: Double = 4
 
     /// 在回收站里已经躺够 `trashRetentionDays` 了吗。
     ///

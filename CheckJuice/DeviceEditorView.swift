@@ -48,8 +48,9 @@ struct DeviceEditorView: View {
     /// 而现实里被盯得最紧的正是 4 小时~几天的短命电池。
     /// 长寿命设备切一下「天」就好，反过来的默认值会让短命设备根本填不出来。
     @State private var lifeUnit: LifeUnit = .hours
-    @State private var notifyLeadAmount = 14.0
-    @State private var notifyLeadUnit: LifeUnit = .days
+    /// 默认走模型里的常数，不在这儿再抄一个 4。
+    @State private var notifyLeadAmount = Device.defaultNotifyLeadHours
+    @State private var notifyLeadUnit: LifeUnit = .hours
     @State private var rows: [EventDraft] = []
     @State private var referencePrior: ReferencePrior?
     @State private var loaded = false
@@ -229,9 +230,13 @@ struct DeviceEditorView: View {
                 .labelsHidden()
                 .frame(width: 130)
             }
-            Text("= \(Int(notifyLeadHours.rounded())) 小时")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            // 只在「天」这一档才需要换算：单位已经是小时时，这行跟上面的输入框
+            // 一个字都不差，属于纯噪音。
+            if notifyLeadUnit == .days {
+                Text("= \(Int(notifyLeadHours.rounded())) 小时")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if notifyLeadHours >= lifeHours {
                 Label("提醒提前量已经不小于电池寿命了 —— 这个物品会一直处于「该备货」状态。"
                       + "短命电池（几小时到几天）建议用小时作单位。",
@@ -269,13 +274,18 @@ struct DeviceEditorView: View {
 
     // MARK: - 文案
 
+    /// 「另一个单位」下的数值，**故意不带 `≈`** —— 符号由调用方的 `Text` 加。
+    ///
+    /// ⚠️ 曾经两边各写了一个 `≈`，于是页面上真的显示成 `≈ ≈ 3.0 天`。
+    /// 这种重复我的机械检查器一概查不出来（全是合法文本），只能靠眼睛看。
+    /// 所以符号**只留一处**，这里只管数字和单位。
     private var otherUnitText: String {
         let total = max(lifeAmount, 1) * lifeUnit.hoursPerUnit
         // 要的是**另一个单位的原始数字**，所以不能用 `DurationText` ——
         // 它会按量级重新挑单位（填 30 天 → 提示又叫你「约 30 天」，等于没说）。
         switch lifeUnit {
-        case .hours: return "≈ \(number(total / 24)) 天"
-        case .days: return "≈ \(number(total)) 小时"
+        case .hours: return "\(number(total / 24)) 天"
+        case .days: return "\(number(total)) 小时"
         }
     }
 
@@ -339,24 +349,16 @@ struct DeviceEditorView: View {
         }
         name = device.name
         referencePrior = device.referencePrior
-        // 寿命一律按「小时」还是「天」显示更顺眼？能整除 24 就用天，否则用小时。
-        let totalHours = device.nominalLifeHours
-        if totalHours >= 24, totalHours.truncatingRemainder(dividingBy: 24) == 0 {
-            lifeUnit = .days
-            lifeAmount = totalHours / 24
-        } else {
-            lifeUnit = .hours
-            lifeAmount = totalHours
-        }
-        // 提醒提前量：能整除 24 就用天，否则用小时 —— 4 小时电池填「1 天」太糙。
-        let lead = device.notifyLeadHours
-        if lead >= 24, lead.truncatingRemainder(dividingBy: 24) == 0 {
-            notifyLeadUnit = .days
-            notifyLeadAmount = lead / 24
-        } else {
-            notifyLeadUnit = .hours
-            notifyLeadAmount = max(lead, 1)
-        }
+        // 一律按**小时**回填，不做「能整除 24 就改成天」的自动换算。
+        //
+        // 试过自动换算，结论是设计过度：填 72 小时，下次打开变成 3 天 ——
+        // 数字没变，但用户得重新脑补一遍「我当初填的到底是哪个」。
+        // 单位是他自己选的，就别背着他动。想换量级自己切一下切换器，
+        // 下面那行提示也会给出对应换算值。
+        lifeUnit = .hours
+        lifeAmount = device.nominalLifeHours
+        notifyLeadUnit = .hours
+        notifyLeadAmount = device.notifyLeadHours
         rows = device.sortedEvents.map { EventDraft(at: $0.at, kind: $0.kind) }
         if rows.isEmpty { rows = [EventDraft(at: Date(), kind: .initial)] }
     }
