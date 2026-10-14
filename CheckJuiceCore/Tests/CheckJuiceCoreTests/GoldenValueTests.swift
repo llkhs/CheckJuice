@@ -126,7 +126,7 @@ final class GoldenValueTests: XCTestCase {
         let today = try date(golden.today)
         let model = LifetimeModel()
 
-        XCTAssertEqual(golden.cases.count, 15, "黄金用例数量变了，确认是无意的还是漏改了")
+        XCTAssertEqual(golden.cases.count, 17, "黄金用例数量变了，确认是无意的还是漏改了")
 
         for key in golden.cases.keys.sorted() {
             let gold = golden.cases[key]!
