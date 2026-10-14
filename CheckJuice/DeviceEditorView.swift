@@ -56,6 +56,12 @@ struct DeviceEditorView: View {
     @State private var loaded = false
     /// 底部「删除这个物品」的确认框开关。
     @State private var showingDeleteConfirm = false
+    /// 编辑页里起点是否处于「已解锁、可改」状态。
+    ///
+    /// **不持久化** —— 纯粹是这一次编辑的临时状态，退出编辑页就回到锁定。
+    /// 想动起点，每次都得显式解一次锁：它值得这点麻烦。
+    @State private var isAnchorUnlocked = false
+    @State private var showingUnlockConfirm = false
 
     private var isEditing: Bool { editingID != nil }
 
@@ -98,6 +104,16 @@ struct DeviceEditorView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("\(Int(Device.trashRetentionDays)) 天内可以在「设置 → 回收站」里找回来，之后自动清除。")
+        }
+        // 解锁起点用 `alert` 而不是第二个 `confirmationDialog`：
+        // **同一个视图上叠两个 `.confirmationDialog` 会抽风**（谁弹出来不确定），
+        // 这坑在回收站页刚踩过一次。两种不同的 presentation 类型共存则没问题。
+        .alert("修改时间线起点？", isPresented: $showingUnlockConfirm) {
+            Button("解锁") { isAnchorUnlocked = true }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("起点是每一段间隔的起算点。改了它，所有记录的时长都会重新算，"
+                 + "预测也跟着变。改完记得点锁图标锁回去。")
         }
     }
 
@@ -147,8 +163,17 @@ struct DeviceEditorView: View {
     ///
     /// **它是整条时间线的锚**：改一下，它到下一颗之间的那段间隔就整个变了样，
     /// 而那段间隔正是这个 App 唯一的证据来源（`.initial` 只能当起点不能当终点）。
-    /// 所以编辑已有物品时它只读、不可删，见 `eventRow` / `deleteRows`。
+    /// 所以编辑已有物品时它默认只读，要改得先点锁图标解锁。
     private var anchorDate: Date? { orderedRows.first?.at }
+
+    /// 起点的**上限** = 第二条记录的时刻。
+    ///
+    /// 起点必须是最早的那条，否则排序之后它会被顶到后面去 ——
+    /// 用户以为自己改了起点，其实改的是普通记录，而**真正的起点偷偷换成了下一条**。
+    /// 那种「改了等于没改、还顺手动了别的东西」最坑，所以直接把范围卡死。
+    private var anchorUpperBound: Date? {
+        orderedRows.count > 1 ? orderedRows[1].at : nil
+    }
 
     private var rowModels: [Row] {
         let sorted = orderedRows
@@ -187,9 +212,14 @@ struct DeviceEditorView: View {
         } header: {
             Text("更换记录")
         } footer: {
-            Text(isEditing
-                 ? "最早那条是时间线的起点，定了就不能改 —— 后面每一段的时长都是从它算起的。"
-                 : "已经换过几次？把它们补进来，预测就不用从零学起。最早那条会成为时间线起点。")
+            if isEditing && isAnchorUnlocked {
+                Text("起点已解锁：改完请点锁图标锁回去。起点一动，后面每一段的时长都会重新算。")
+                    .foregroundStyle(.orange)
+            } else if isEditing {
+                Text("最早那条是时间线的起点，每一段的时长都从它算起。点右边的锁可以解锁修改。")
+            } else {
+                Text("已经换过几次？把它们补进来，预测就不用从零学起。最早那条会成为时间线起点。")
+            }
         }
     }
 
@@ -202,20 +232,24 @@ struct DeviceEditorView: View {
         VStack(alignment: .leading, spacing: 6) {
             if isAnchor {
                 Text(isEditing
-                     ? "上次换电池的时刻 · 时间线起点（不可修改）"
+                     ? "上次换电池的时刻 · 时间线起点"
                      : "上次换电池的时刻 · 从这儿开始算")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 if isEditing {
-                    // 起点只读：它是整条时间线的锚，改一下它到下一颗之间的间隔
+                    // 默认只读，右侧的锁图标是唯一的修改入口。
+                    // 为什么非要加这道锁：它是整条时间线的锚，改一下它到下一颗之间的间隔
                     // 就整个变了样，而那段间隔正是这个 App 唯一的证据来源。
-                    HStack(spacing: 6) {
-                        Image(systemName: "lock.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Text(row.at.formatted(date: .long, time: .shortened))
-                            .monospacedDigit()
+                    HStack(spacing: 8) {
+                        if isAnchorUnlocked {
+                            anchorDatePicker(draft: draft)
+                        } else {
+                            Text(row.at.formatted(date: .long, time: .shortened))
+                                .monospacedDigit()
+                        }
+                        Spacer(minLength: 8)
+                        lockToggle
                     }
                 } else {
                     // 新增时它是**正在被定义**的那个值，所以可改。
@@ -247,6 +281,52 @@ struct DeviceEditorView: View {
             }
         }
         .padding(.vertical, 2)
+    }
+
+    /// 起点行的锁按钮 —— 修改起点的**唯一入口**。
+    ///
+    /// 图标用 SF Symbols 系统自带的 `lock.fill` / `lock.open.fill`：
+    /// 不用打包任何图片资源、不用第三方图标库，且自动跟随字号、字重、深色模式。
+    private var lockToggle: some View {
+        Button {
+            if isAnchorUnlocked {
+                // 锁回去**不需要**确认：锁上永远更安全，就算误点也无害。
+                isAnchorUnlocked = false
+            } else {
+                // 解锁要确认 —— 这一步是「我确实要动它」的分界线。
+                showingUnlockConfirm = true
+            }
+        } label: {
+            // 只有图标时点击区等于图标本身（约 20pt），太难点中。
+            // 撑到 34pt 但**不加背景**，所以看起来还只是一个小图标。
+            Image(systemName: isAnchorUnlocked ? "lock.open.fill" : "lock.fill")
+                .frame(width: 34, height: 34)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .tint(isAnchorUnlocked ? .orange : .secondary)
+        .accessibilityLabel(isAnchorUnlocked ? "重新锁定起点" : "解锁并修改起点")
+    }
+
+    /// 起点的时刻选择器（仅解锁后显示）。
+    ///
+    /// 上限卡在第二条记录**之前**（减 1 秒是为了强制严格早于）：
+    /// 起点允许等于第二条的话，排序结果会变得不确定，`orderedRows.first`
+    /// 可能在两条之间跳 —— 那正是「改了等于没改」的源头。
+    @ViewBuilder
+    private func anchorDatePicker(draft: Binding<EventDraft>) -> some View {
+        if let upper = anchorUpperBound {
+            // 先算出上限再传进去：`...upper.addingTimeInterval(-1)` 写在一行里
+            // 要人脑解析前缀运算符和方法调用的优先级，不如摊开。
+            let limit = upper.addingTimeInterval(-1)
+            DatePicker("", selection: draft.at, in: ...limit,
+                       displayedComponents: [.date, .hourAndMinute])
+                .labelsHidden()
+        } else {
+            DatePicker("", selection: draft.at,
+                       displayedComponents: [.date, .hourAndMinute])
+                .labelsHidden()
+        }
     }
 
     /// 记录行的时刻选择器。`lowerBound` 传时间线起点时，用户**选不到更早的时刻**。
