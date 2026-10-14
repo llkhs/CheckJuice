@@ -109,10 +109,15 @@ jobs:
           echo "--- Assets.car 是否编出来 ---"
           ls -la "$APP/Assets.car" 2>/dev/null || echo "（没有 Assets.car）"
 
+          # 用显式 if 而不是 `cmd && var=1`：GitHub Actions 的 bash 带 -e，
+          # AND 列表的失败虽然不会中止脚本，但那种「靠规则细节才不出事」的写法
+          # 不值得留 —— 显式写出来谁读都清楚。
           png_ok=0
-          ls "$APP"/AppIcon*.png >/dev/null 2>&1 && png_ok=1
+          if ls "$APP"/AppIcon*.png >/dev/null 2>&1; then png_ok=1; fi
           name_ok=0
-          /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$APP/Info.plist" >/dev/null 2>&1 && name_ok=1
+          if /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$APP/Info.plist" >/dev/null 2>&1; then
+            name_ok=1
+          fi
 
           if [ "$png_ok" -eq 0 ] && [ "$name_ok" -eq 0 ]; then
             echo "::error::产物里找不到任何 App 图标（既没有 AppIcon*.png，也没有 CFBundleIconName）—— 多半是 project.yml 缺 ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon"
