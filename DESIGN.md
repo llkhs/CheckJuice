@@ -651,10 +651,15 @@ AppGroup.resolvedIdentifier  // 第一个 containerURL 不为 nil 的（只算�
 |---|---|---|---|
 | M1 | Core 包：模型 + `LifetimeModel` + 单元测试 | ✅ 完成 | 算法可验证，数值与 Python 参考实现锁定 |
 | M2a | XcodeGen 工程 + App/Widget 骨架 + CI 出未签名 IPA | ✅ 完成 | 打通「本机写码 → CI 编译 → 出包」全链路 |
-| M2b | 完整界面：设备列表/详情/编辑 + 通知 | ⬜ 待做 | 手机能跑通记账 |
-| M3 | 交互式小组件（`Button(intent:)` 就地换电池） | ⬜ 待做 | 桌面能看能点 |
-| M4 | 签名（读描述文件生成 entitlements）+ 装真机 | ⬜ 待做 | 手机上真能用 |
+| M2b | 完整界面：设备列表/详情/编辑 + 通知 | 🟡 界面完成、**通知未做** | 真机已验证：增删改、更换记录、回收站、诊断全部可用 |
+| M3 | 交互式小组件（`Button(intent:)` 就地换电池） | ⬜ 待做 | 桌面能看能点（**能看已经跑通**） |
+| M4 | 签名（读描述文件生成 entitlements）+ 装真机 | 🟡 签名问题已解决、真机已跑通 | 只剩「不用手工抄候选组」这一步 |
 | M5 | Android 移植（可选） | ⬜ 搁置 | 抄 Kotlin + 跑黄金数值 |
+
+**当前验证状态（2026-10-14）**：Core Tests `Executed 31 tests, with 0 failures`。
+31 = Behaviour 17 + Golden 2 + ModelPreset 3 + Store 4 + Trash 5。
+> 看 `Executed N tests` 这一步不能省：`swift test` 一个测试都没找到时照样 exit 0，
+> 只报 `no tests found`。光看 CI 是绿的，等于什么都没验。
 
 > **修订记录（v0.3）**
 > - M2 原写「SwiftData」→ **改为 JSON 持久化**。数据量只有几十条，
