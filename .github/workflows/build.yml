@@ -88,6 +88,38 @@ jobs:
             echo "::error::build/Build/Products 下找不到任何 .app/.appex，构建可能更早就失败了"
           fi
 
+      - name: 校验图标真的进了产物
+        # ⚠️ 这一步不能省。
+        #
+        # 忘了在 project.yml 里设 ASSETCATALOG_COMPILER_APPICON_NAME 时，
+        # 资源目录里那张图会被**静默忽略**：构建成功、测试全绿、桌面是白图标。
+        # XcodeGen 不会替你加这行，Xcode 新建工程时却是模板自带 ——
+        # 所以这个坑对新项目特别容易踩，而且踩了没有任何提示。
+        #
+        # 因此不能相信构建配置，要直接检查**产物里到底有什么**。
+        run: |
+          APP="build/Build/Products/Release-iphoneos/CheckJuice.app"
+          echo "--- .app 根目录下含 icon 的文件 ---"
+          ls -la "$APP" | grep -i 'icon' || echo "（一个都没有）"
+          echo "--- Info.plist 里的图标信息 ---"
+          for key in CFBundleIconName CFBundleIcons CFBundleIcons~ipad; do
+            printf '%s = ' "$key"
+            /usr/libexec/PlistBuddy -c "Print :$key" "$APP/Info.plist" 2>/dev/null || echo "（缺）"
+          done
+          echo "--- Assets.car 是否编出来 ---"
+          ls -la "$APP/Assets.car" 2>/dev/null || echo "（没有 Assets.car）"
+
+          png_ok=0
+          ls "$APP"/AppIcon*.png >/dev/null 2>&1 && png_ok=1
+          name_ok=0
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIconName' "$APP/Info.plist" >/dev/null 2>&1 && name_ok=1
+
+          if [ "$png_ok" -eq 0 ] && [ "$name_ok" -eq 0 ]; then
+            echo "::error::产物里找不到任何 App 图标（既没有 AppIcon*.png，也没有 CFBundleIconName）—— 多半是 project.yml 缺 ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon"
+            exit 1
+          fi
+          echo "✅ 图标已进产物（AppIcon*.png=$png_ok / CFBundleIconName=$name_ok）"
+
       - name: 打包未签名 IPA
         run: |
           APP="build/Build/Products/Release-iphoneos/CheckJuice.app"
