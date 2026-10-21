@@ -337,9 +337,16 @@ private struct ExportSheet: View {
             .task {
                 // 文件不大（几十台设备也就几十 KB），一次读全，不做分页。
                 let raw = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
-                content = raw.isEmpty
-                    ? AttributedString("（读取失败）")
-                    : JSONHighlighter.attributed(raw)
+                guard !raw.isEmpty else {
+                    content = AttributedString("（读取失败）")
+                    return
+                }
+                // **着色放后台**：它是纯计算（扫描 + 建属性区间），
+                // 但几百 KB 的 JSON 在主线程上跑还是会顿一下。
+                // `.task` 本身在主 actor，await 回来再赋值，正好。
+                content = await Task.detached(priority: .userInitiated) {
+                    JSONHighlighter.attributed(raw)
+                }.value
             }
             .sheet(item: $shareSheet) { item in
                 ActivityView(url: item.url)
