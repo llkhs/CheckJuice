@@ -126,45 +126,14 @@ final class AppModel {
     ///
     /// 只看 `activeDevices`：回收站里的东西不该再占着主页、更不该进风险排序。
     var ranked: [RankedDevice] {
-        let items = engine.predictions(for: activeDevices, now: Date())
+        sortMode.sorted(engine.predictions(for: activeDevices, now: Date()))
             .map { RankedDevice(device: $0.device, prediction: $0.prediction) }
-
-        switch sortMode {
-        case .urgency:
-            return items.sorted { lhs, rhs in
-                let a = Self.rank(lhs.prediction.urgency)
-                let b = Self.rank(rhs.prediction.urgency)
-                if a != b { return a < b }
-                return lhs.prediction.remainingHours < rhs.prediction.remainingHours
-            }
-        case .remaining:
-            // 按**屏幕上那个数**排（P10 剩余）。用户看到「还剩 30 小时」排在
-            // 「还剩 90 小时」前面才符合直觉；拿中位排会出现肉眼看起来乱序。
-            return items.sorted { $0.prediction.p10RemainingHours < $1.prediction.p10RemainingHours }
-        case .name:
-            return items.sorted {
-                $0.device.name.localizedStandardCompare($1.device.name) == .orderedAscending
-            }
-        case .recent:
-            return items.sorted { Self.createdAt($0.device) > Self.createdAt($1.device) }
-        }
     }
 
-    /// 「添加时间」= 最早那条记录的时刻（也就是创建时填的基准点）。
-    ///
-    /// 不用 `id` 或文件顺序：那两者都对用户不可见，也没法解释「为什么这台排前面」。
-    private static func createdAt(_ device: Device) -> Date {
-        device.sortedEvents.first?.at ?? .distantPast
-    }
-
-    private static func rank(_ urgency: Urgency) -> Int {
-        switch urgency {
-        case .overdue: return 0
-        case .risk: return 1
-        case .stockUp: return 2
-        case .normal: return 3
-        }
-    }
+    // 排序实现住在 Core 的 `SortMode.sorted(_:)`。搬到那儿的原因很实际：
+    // 它原先在这里，`swift test` 够不着，而导出为了「复用」另抄了一份
+    // `predictions(for:)`（写死按紧急度排），结果 JSON 的 `sortMode` 和实际顺序对不上。
+    // **放 Core 就能测**，测了才不会再分叉。
 
     // MARK: - 变更
 
@@ -294,7 +263,10 @@ final class AppModel {
     /// 每次调用都重新写一份：数据量只有几十台，没必要做缓存失效逻辑。
     func makeExportFile() throws -> URL {
         let now = Date()
-        let pairs = engine.predictions(for: activeDevices, now: now)
+        // 跟列表用同一个排序函数 —— 否则 JSON 里的 `sortMode` 和数组实际顺序会不一致。
+        // （曾经这里直接用 `engine.predictions(for:)`，那个写死按紧急度排，
+        //   于是导出文件里写着 `sortMode: "name"`、数组却是紧急度顺序。字段在撒谎。）
+        let pairs = sortMode.sorted(engine.predictions(for: activeDevices, now: now))
         let reference = engine.predictions(for: devices, now: now)
         let trashedDays = Dictionary(
             uniqueKeysWithValues: reference
@@ -332,7 +304,19 @@ final class AppModel {
         )
 
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        // ⚠️ **不能用 `.iso8601`**：那个只精确到秒。
+        // 用户点「添加」时记的是「此刻」，带小数秒，截断后：
+        //   - `events[].at` 少了最多 1 秒
+        //   - `exportedAt` 也少了最多 1 秒
+        // 于是拿导出文件离线重算，`ageHours` / `remainingHours` 会差 1e-4 小时量级，
+        // 看起来像「算法算错了」，其实是导出丢了精度。
+        // 这个问题是拿真机导出的数据比对时抓到的（5 台设备里 4 台对不上）。
+        encoder.dateEncodingStrategy = .custom { date, enc in
+            // 参数名不用 `encoder`：那是外面那个 JSONEncoder 的名字，
+            // 遮蔽之后读代码容易误以为在配置它。
+            var container = enc.singleValueContainer()
+            try container.encode(Self.exportDateFormatter.string(from: date))
+        }
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         let data = try encoder.encode(bundle)
 
@@ -380,6 +364,15 @@ final class AppModel {
             notifyLeadHours: lead
         )
     }
+
+    /// ISO8601 **带毫秒**。只用于导出，不影响 App 内的存储格式
+    /// （`DeviceStore` 仍用秒级 `.iso8601` —— 那是 App 与小组件的既有契约，
+    ///  没有理由为了导出精度去动它）。
+    private static let exportDateFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
 
     /// 保留 1 位小数就够读数了 —— 导出文件是给人看的，不是给机器算的。
     private static func fmt(_ value: Double) -> String {

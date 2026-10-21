@@ -86,3 +86,51 @@ public enum SortMode: String, Codable, Sendable, CaseIterable, Identifiable {
         }
     }
 }
+
+/// 一台设备 + 它的预测。列表、导出、排序都用这个形状。
+public typealias DevicePrediction = (device: Device, prediction: Prediction)
+
+extension SortMode {
+    /// 按本方式排序。
+    ///
+    /// **列表和导出必须共用这一份。** 曾经导出直接用了
+    /// `LifetimeModel.predictions(for:)`（那个写死按紧急度排），
+    /// 于是 JSON 里写着 `sortMode: "name"`、数组顺序却是紧急度 —— 字段在撒谎。
+    /// 当时排序逻辑住在 App 层，`swift test` 够不着，所以没人发现。
+    public func sorted(_ items: [DevicePrediction]) -> [DevicePrediction] {
+        switch self {
+        case .urgency:
+            return items.sorted { lhs, rhs in
+                let a = SortMode.urgencyRank(lhs.prediction.urgency)
+                let b = SortMode.urgencyRank(rhs.prediction.urgency)
+                if a != b { return a < b }
+                return lhs.prediction.remainingHours < rhs.prediction.remainingHours
+            }
+        case .remaining:
+            // 按**屏幕上那个数**排（P10 剩余）。用户看到「还剩 30 小时」排在
+            // 「还剩 90 小时」前面才符合直觉；拿中位排会显得乱序。
+            return items.sorted { $0.prediction.p10RemainingHours < $1.prediction.p10RemainingHours }
+        case .name:
+            return items.sorted {
+                $0.device.name.localizedStandardCompare($1.device.name) == .orderedAscending
+            }
+        case .recent:
+            // 「添加时间」= 最早那条记录的时刻（创建时填的基准点）。
+            // 不用 id 或文件顺序：那两者对用户不可见，也没法解释「为什么它排前面」。
+            return items.sorted { lhs, rhs in
+                let a = lhs.device.sortedEvents.first?.at ?? .distantPast
+                let b = rhs.device.sortedEvents.first?.at ?? .distantPast
+                return a > b
+            }
+        }
+    }
+
+    static func urgencyRank(_ urgency: Urgency) -> Int {
+        switch urgency {
+        case .overdue: return 0
+        case .risk: return 1
+        case .stockUp: return 2
+        case .normal: return 3
+        }
+    }
+}
