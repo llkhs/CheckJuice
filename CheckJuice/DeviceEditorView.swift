@@ -526,7 +526,13 @@ struct DeviceEditorView: View {
         notifyLeadUnit = .hours
         // 四舍五入到整数：`Stepper(step: 1)` 遇到 1.5 会加出 2.5、3.5，
         // 而显示用的是 `Int(...)`，会看到「2 → 3 → 3」这种鬼现象。
-        notifyLeadAmount = device.notifyLeadHours.rounded()
+        //
+        // ⚠️ 但 `rounded()` 会把 0 < lead < 0.5 压成 **0**，而 0 的含义是
+        // 「关闭黄色预警」。打开一次编辑页再保存，预警就静默没了。
+        // 这种精度在界面上本来就表达不出来（步进是整小时），
+        // 宁可显示 1 也别显示 0 —— 显示 0 会顺手关掉一个功能。
+        let rounded = device.notifyLeadHours.rounded()
+        notifyLeadAmount = (device.notifyLeadHours > 0 && rounded == 0) ? 1 : rounded
         rows = device.sortedEvents.map { EventDraft(at: $0.at, kind: $0.kind) }
         if rows.isEmpty { rows = [EventDraft(at: Self.nowToMinute, kind: .initial)] }
     }

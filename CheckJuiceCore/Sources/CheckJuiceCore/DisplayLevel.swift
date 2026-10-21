@@ -97,6 +97,27 @@ extension SortMode {
     /// `LifetimeModel.predictions(for:)`（那个写死按紧急度排），
     /// 于是 JSON 里写着 `sortMode: "name"`、数组顺序却是紧急度 —— 字段在撒谎。
     /// 当时排序逻辑住在 App 层，`swift test` 够不着，所以没人发现。
+    /// 稳定的 tiebreak。
+    ///
+    /// ⚠️ Swift 的 `sorted(by:)` **不保证稳定**。真机反馈「排列有问题」，
+    /// 实际是四台设备的创建时刻一模一样（都点到同一秒），比较函数返回 false，
+    /// 顺序就由内部算法决定 —— 每次求值可能不同，看起来像乱跳。
+    /// 用 id 兜底后，相同 key 的相对顺序永远一致。
+    ///
+    /// **顺序**：先比名称，再比 `id`。
+    ///
+    /// 名称优先是因为：同一秒添加的几台，用 UUID 排出来的结果虽然稳定，
+    /// 但对人是乱的（实测得到 2,3,4,1）。按名称排出来是 1,2,3,4，
+    /// 至少看得懂。`id` 只作为最后的兜底 —— 同名同时间的两台也需要**某一**种
+    /// 确定顺序，至于哪一种无所谓。
+    private static func tieBreak(_ a: DevicePrediction, _ b: DevicePrediction) -> Bool {
+        switch a.device.name.localizedStandardCompare(b.device.name) {
+        case .orderedAscending: return true
+        case .orderedDescending: return false
+        case .orderedSame: return a.device.id.uuidString < b.device.id.uuidString
+        }
+    }
+
     public func sorted(_ items: [DevicePrediction]) -> [DevicePrediction] {
         switch self {
         case .urgency:
@@ -104,15 +125,27 @@ extension SortMode {
                 let a = SortMode.urgencyRank(lhs.prediction.urgency)
                 let b = SortMode.urgencyRank(rhs.prediction.urgency)
                 if a != b { return a < b }
-                return lhs.prediction.remainingHours < rhs.prediction.remainingHours
+                if lhs.prediction.remainingHours != rhs.prediction.remainingHours {
+                    return lhs.prediction.remainingHours < rhs.prediction.remainingHours
+                }
+                return Self.tieBreak(lhs, rhs)
             }
         case .remaining:
             // 按**屏幕上那个数**排（P10 剩余）。用户看到「还剩 30 小时」排在
             // 「还剩 90 小时」前面才符合直觉；拿中位排会显得乱序。
-            return items.sorted { $0.prediction.p10RemainingHours < $1.prediction.p10RemainingHours }
+            return items.sorted { lhs, rhs in
+                if lhs.prediction.p10RemainingHours != rhs.prediction.p10RemainingHours {
+                    return lhs.prediction.p10RemainingHours < rhs.prediction.p10RemainingHours
+                }
+                return Self.tieBreak(lhs, rhs)
+            }
         case .name:
-            return items.sorted {
-                $0.device.name.localizedStandardCompare($1.device.name) == .orderedAscending
+            return items.sorted { lhs, rhs in
+                switch lhs.device.name.localizedStandardCompare(rhs.device.name) {
+                case .orderedAscending: return true
+                case .orderedDescending: return false
+                case .orderedSame: return Self.tieBreak(lhs, rhs)
+                }
             }
         case .recent:
             // 「添加时间」= 最早那条记录的时刻（创建时填的基准点）。
@@ -120,7 +153,8 @@ extension SortMode {
             return items.sorted { lhs, rhs in
                 let a = lhs.device.sortedEvents.first?.at ?? .distantPast
                 let b = rhs.device.sortedEvents.first?.at ?? .distantPast
-                return a > b
+                if a != b { return a > b }
+                return Self.tieBreak(lhs, rhs)
             }
         }
     }

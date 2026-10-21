@@ -82,6 +82,32 @@ final class SortModeTests: XCTestCase {
         XCTAssertEqual(SortMode.recent.sorted(items).map { $0.device.name }, ["新", "中", "老"])
     }
 
+    /// 排序键完全相同时，顺序必须**确定**（不是「看起来对」）。
+    ///
+    /// 真实事故：四台设备的创建时刻一模一样（都点到同一秒），
+    /// User 反馈「排列有问题」。Swift 的 `sort` 不保证稳定，
+    /// 相同 key 的相对顺序由内部算法决定 —— 每帧都可能不同。
+    /// 现在用名称兜底，所以 2,3,4,1 这种乱序不会再出现。
+    func testTieBreakIsDeterministicWhenKeysAreEqual() {
+        let items = [
+            pair("4", nominal: 100, createdAt: 0),
+            pair("1", nominal: 100, createdAt: 0),
+            pair("3", nominal: 100, createdAt: 0),
+            pair("2", nominal: 100, createdAt: 0),
+        ]
+        // 四种模式跑多次，结果必须每次一样
+        for mode in SortMode.allCases {
+            let first = mode.sorted(items).map { $0.device.name }
+            for _ in 0..<5 {
+                XCTAssertEqual(mode.sorted(items).map { $0.device.name }, first,
+                               "[\(mode)] 相同排序键的顺序必须稳定")
+            }
+        }
+        // recent 模式下应得到 1,2,3,4（名称兜底），而不是随机的 2,3,4,1
+        XCTAssertEqual(SortMode.recent.sorted(items).map { $0.device.name },
+                       ["1", "2", "3", "4"])
+    }
+
     /// 紧急度排序：已耗尽的排最前。
     func testUrgencySortPutsExhaustedFirst() {
         let fresh = pair("新电池", nominal: 8760, createdAt: 0)

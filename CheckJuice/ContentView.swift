@@ -333,6 +333,16 @@ private struct ExportSheet: View {
 
     @State private var content: AttributedString = AttributedString("读取中…")
     @State private var shareSheet: ActivityItem?
+    /// 文件大小，**算一次存起来**。
+    ///
+    /// ⚠️ 原来写成计算属性，每次 body 求值都同步调
+    /// `FileManager.attributesOfItem` + 新建 `ByteCountFormatter`。
+    /// 分享面板关掉时 body 会重算好几遍，那几次磁盘 I/O 就是「卡一会儿」的来源。
+    /// body 里绝不能有 I/O 和重量级构造 —— 这是渲染路径，不是初始化路径。
+    @State private var sizeText: String = ""
+    /// 已经加载过没有。用它做 guard，比拿 `content` 是否为空去推断可靠 ——
+    /// 空内容本身也是合法结果（空文件）。
+    @State private var loaded = false
 
     /// `UIActivityViewController` 的 item 需要 identity。
     private struct ActivityItem: Identifiable {
@@ -386,12 +396,24 @@ private struct ExportSheet: View {
                 }
             }
             .task {
+                // ⚠️ 加这道 guard：分享面板关闭时这个视图会重新求值，
+                // 没有 guard 的话每次都要重读文件 + 重新着色一遍，
+                // 表现就是「关掉分享菜单后卡一会儿」。
+                guard !loaded else { return }
+                loaded = true
+
                 // 文件不大（几十台设备也就几十 KB），一次读全，不做分页。
                 let raw = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
                 guard !raw.isEmpty else {
                     content = AttributedString("（读取失败）")
+                    sizeText = "—"
                     return
                 }
+                // 大小只取一次。这里在 .task 里，不在 body 里。
+                let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
+                let bytes = (attrs?[.size] as? NSNumber)?.intValue ?? 0
+                sizeText = ByteCountFormatter.string(fromByteCount: Int64(bytes),
+                                                     countStyle: .file)
                 // **着色放后台**：它是纯计算（扫描 + 建属性区间），
                 // 但几百 KB 的 JSON 在主线程上跑还是会顿一下。
                 // `.task` 本身在主 actor，await 回来再赋值，正好。
@@ -405,11 +427,6 @@ private struct ExportSheet: View {
         }
     }
 
-    private var sizeText: String {
-        let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
-        let bytes = (attrs?[.size] as? NSNumber)?.intValue ?? 0
-        return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
-    }
 }
 
 /// `UIActivityViewController` 的 SwiftUI 包装。
