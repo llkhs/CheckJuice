@@ -167,7 +167,6 @@ struct ContentView: View {
         }
     }
 
-    @ViewBuilder
     /// `if` 没有 `else` 分支，必须 `@ViewBuilder` —— 否则这个计算属性不合法。
     @ViewBuilder
     private var emptyOverlay: some View {
