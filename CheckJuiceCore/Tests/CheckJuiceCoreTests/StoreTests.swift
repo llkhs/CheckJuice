@@ -30,8 +30,13 @@ final class StoreTests: XCTestCase {
         try? FileManager.default.removeItem(at: dir)
     }
 
+    /// 测试数据的时刻必须**落在整分钟**上。
+    ///
+    /// 读路径会把时刻对齐到分钟（见 `Device.normalizedToMinute`），
+    /// 所以拿带秒的数据做往返测试必然不等 —— 那不是 bug，是数据不合契约。
+    /// `1_700_000_000` 是 22:13:20，用它曾把 `testDeviceRoundTrip` 测红过一次。
     private func sampleDevice() -> Device {
-        let installed = Date(timeIntervalSince1970: 1_700_000_000)
+        let installed = LifetimeModel.floorToMinute(Date(timeIntervalSince1970: 1_700_000_000))
         return Device(
             id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
             name: "电子秤",
@@ -76,6 +81,31 @@ final class StoreTests: XCTestCase {
         let device = sampleDevice()
         try DeviceStore(fileURL: url).save([device])
         XCTAssertEqual(DeviceStore(fileURL: url).load(), [device])
+    }
+
+    /// 迁移契约：带秒的旧数据读出来必须是对齐到分钟的。
+    ///
+    /// 这条测试表达的是**新版的行为** —— 读路径不是透明的，
+    /// 它会顺手把时刻收拾干净。写在这里是为了别让人以为 round-trip 丢了精度。
+    func testLoadNormalizesLegacySecondsToMinute() throws {
+        let url = dir.appendingPathComponent("legacy.json")
+        // 1_700_000_000 = 22:13:20，带 20 秒的「旧数据」。
+        let messy = Date(timeIntervalSince1970: 1_700_000_000)
+        let device = Device(
+            name: "电子秤",
+            nominalLifeHours: 8760,
+            events: [ReplacementEvent(at: messy, kind: .initial)],
+            notifyLeadHours: 336
+        )
+        try DeviceStore(fileURL: url).save([device])
+
+        let loaded = try XCTUnwrap(DeviceStore(fileURL: url).load().first)
+        XCTAssertEqual(loaded.events[0].at,
+                       LifetimeModel.floorToMinute(messy),
+                       "旧数据的秒必须被抹掉")
+        XCTAssertEqual(loaded.events[0].at.timeIntervalSince1970
+                        .truncatingRemainder(dividingBy: 60), 0,
+                       "结果必须落在整分钟上")
     }
 
     /// App → 小组件的契约。改了 `DeviceSnapshot` 的字段名却忘了改小组件，
