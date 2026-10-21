@@ -72,6 +72,27 @@ public struct LifetimeModel {
         return Date(timeIntervalSince1970: flooredLocal - offset)
     }
 
+    /// 把时刻**截断到分钟**（向下取整）。
+    ///
+    /// 存在的理由：用户界面上只能表达「年月日时分」——
+    /// `DatePicker(displayedComponents: [.date, .hourAndMinute])` 根本没有秒这一位。
+    /// 但默认值过去用的是 `Date()`，带小数秒。
+    ///
+    /// 后果不是「精度更高更好」，而是**看到的和存的不是一回事**：
+    /// 屏幕上写 14:21，库里其实是 14:21:48.373。用户以为自己没选秒，秒却进了数据。
+    ///
+    /// 统一到分钟之后：**看到 = 存的 = 算的**，没有藏起来的东西。
+    /// 量化误差对 4 小时电池约 0.4%，远小于任何真实不确定性。
+    ///
+    /// 用**向下**截断而不是四舍五入：跟 `floorToHour` 同一口径，
+    /// 而且「14:21:48 记成 14:21」比「记成 14:22」更不容易让人以为自己填错了。
+    public static func floorToMinute(_ date: Date) -> Date {
+        // 用绝对时间戳算，不涉及时区：分钟对齐在任何时区下都是同一组时刻
+        // （UTC 偏移都是整分钟的，不存在 ±30 秒的时区）。
+        let seconds = date.timeIntervalSince1970
+        return Date(timeIntervalSince1970: (seconds / 60.0).rounded(.down) * 60.0)
+    }
+
     /// 把小时数**朝零截断**到整数小时。
     ///
     /// 为什么朝零而不是向下：两个方向都要「宁少不多」。

@@ -60,10 +60,21 @@ struct DeviceEditorView: View {
     ///
     /// **不持久化** —— 纯粹是这一次编辑的临时状态，退出编辑页就回到锁定。
     /// 想动起点，每次都得显式解一次锁：它值得这点麻烦。
+    /// 名称输入框焦点。仅新增时自动获得（见 `load()`）。
+    @FocusState private var nameFocused: Bool
     @State private var isAnchorUnlocked = false
     @State private var showingUnlockConfirm = false
 
     private var isEditing: Bool { editingID != nil }
+
+    /// 「此刻」按分钟对齐后的值。
+    ///
+    /// 界面上只显示到分钟（`DatePicker(displayedComponents:)` 没有秒这一位），
+    /// 所以存进数据的也必须到分钟 —— 否则用户看到 14:21、库里是 14:21:48，
+    /// 两者差了一截，而他根本没机会选那 48 秒。
+    private static var nowToMinute: Date {
+        LifetimeModel.floorToMinute(Date())
+    }
 
     /// 按时间升序。列表就按这个顺序显示 —— 用户把某条改到更早的日期，
     /// 它会当场挪上去，「起始」标记也跟着换行，所见即所得。
@@ -122,6 +133,9 @@ struct DeviceEditorView: View {
     private var identitySection: some View {
         Section("这是什么") {
             TextField("例如：温湿度计", text: $name)
+                // 新增时焦点直接落在这里：进页面就能打字，不用先点一下输入框。
+                // 编辑已有物品不抢焦点 —— 那时候用户多半是来改别的字段的。
+                .focused($nameFocused)
         }
     }
 
@@ -205,7 +219,7 @@ struct DeviceEditorView: View {
             .onDelete(perform: deleteRows)
 
             Button {
-                rows.append(EventDraft(at: Date(), kind: .exhausted))
+                rows.append(EventDraft(at: Self.nowToMinute, kind: .exhausted))
             } label: {
                 Label("加一条记录", systemImage: "plus.circle")
             }
@@ -349,8 +363,15 @@ struct DeviceEditorView: View {
     private var notifySection: some View {
         Section {
             HStack {
-                TextField("提前", value: $notifyLeadAmount, format: .number)
-                    .keyboardType(.decimalPad)
+                // 用 `Stepper` 而不是「文本框 + 手搓两个按钮」：
+                // Stepper 自带加/减、长按连发、无障碍标签。
+                //
+                // ⚠️ Picker **不放进 Stepper 的 label 里** —— 那会变成嵌套交互控件，
+                // segmented 的点击可能被 Stepper 吞掉。两者平铺在一行。
+                Stepper(value: $notifyLeadAmount, in: 0...999, step: 1) {
+                    Text("提前 \(Int(notifyLeadAmount))")
+                        .monospacedDigit()
+                }
                 Picker("", selection: $notifyLeadUnit) {
                     ForEach(LifeUnit.allCases) { Text($0.rawValue).tag($0) }
                 }
@@ -454,7 +475,7 @@ struct DeviceEditorView: View {
     /// 所以要靠 id 才对得上号。
     private func binding(for id: UUID) -> Binding<EventDraft> {
         Binding(
-            get: { rows.first { $0.id == id } ?? EventDraft(at: Date(), kind: .exhausted) },
+            get: { rows.first { $0.id == id } ?? EventDraft(at: Self.nowToMinute, kind: .exhausted) },
             set: { newValue in
                 guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
                 rows[index] = newValue
@@ -477,7 +498,10 @@ struct DeviceEditorView: View {
         guard !loaded else { return }
         loaded = true
         guard let id = editingID, let device = appModel.device(withID: id) else {
-            rows = [EventDraft(at: Date(), kind: .initial)]
+            rows = [EventDraft(at: Self.nowToMinute, kind: .initial)]
+            // 新增：进页面就准备接收输入。
+            // 稍等一下再置焦点 —— 刚 onAppear 时输入框还没进视图层级，直接设会失效。
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { nameFocused = true }
             return
         }
         name = device.name
@@ -491,14 +515,16 @@ struct DeviceEditorView: View {
         lifeUnit = .hours
         lifeAmount = device.nominalLifeHours
         notifyLeadUnit = .hours
-        notifyLeadAmount = device.notifyLeadHours
+        // 四舍五入到整数：`Stepper(step: 1)` 遇到 1.5 会加出 2.5、3.5，
+        // 而显示用的是 `Int(...)`，会看到「2 → 3 → 3」这种鬼现象。
+        notifyLeadAmount = device.notifyLeadHours.rounded()
         rows = device.sortedEvents.map { EventDraft(at: $0.at, kind: $0.kind) }
-        if rows.isEmpty { rows = [EventDraft(at: Date(), kind: .initial)] }
+        if rows.isEmpty { rows = [EventDraft(at: Self.nowToMinute, kind: .initial)] }
     }
 
     private func draftDevice(name draftName: String) -> Device {
         var ordered = orderedRows
-        if ordered.isEmpty { ordered = [EventDraft(at: Date(), kind: .initial)] }
+        if ordered.isEmpty { ordered = [EventDraft(at: Self.nowToMinute, kind: .initial)] }
         // 最旧那条只标记时间线的起点：在它之前这颗电池何时装上，我们不知道，
         // 所以强制 `.initial` —— 它后面那段间隔不能当寿命样本。
         ordered[0].kind = .initial

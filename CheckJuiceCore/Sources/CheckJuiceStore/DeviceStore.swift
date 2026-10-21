@@ -22,7 +22,20 @@ public struct DeviceStore: Sendable {
         guard let fileURL, let data = try? Data(contentsOf: fileURL) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([Device].self, from: data)) ?? []
+        // 一次性迁移：把历史时刻对齐到分钟，见 `Device.normalizedToMinute`。
+        // 放在读路径上（而不是写一个单独的迁移脚本）是因为：
+        // 只能有一个入口会把数据读进来，放这儿**不可能漏跑**。
+        let raw = (try? decoder.decode([Device].self, from: data)) ?? []
+        let normalized = raw.map { $0.normalizedToMinute }
+
+        // 顺手把磁盘也清干净，不然「内存里是分钟、文件里还带着秒」，
+        // 下次有人直接翻 devices.json 会以为没迁移过。
+        // `try?` 吞掉失败是**故意的**：这只是顺手清理，内存数据已经对齐了，
+        // 功能不受影响；而这里若抛错反而会把「加载数据」这件正事也带崩。
+        if normalized != raw {
+            try? save(normalized)
+        }
+        return normalized
     }
 
     /// 存不进去就**抛错**，不装作成功。
