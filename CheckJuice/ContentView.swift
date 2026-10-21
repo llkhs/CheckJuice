@@ -168,6 +168,8 @@ struct ContentView: View {
     }
 
     @ViewBuilder
+    /// `if` 没有 `else` 分支，必须 `@ViewBuilder` —— 否则这个计算属性不合法。
+    @ViewBuilder
     private var emptyOverlay: some View {
         if model.ranked.isEmpty {
             ContentUnavailableView(
@@ -222,9 +224,15 @@ struct ContentView: View {
     private func sheetContent(_ page: Presented) -> some View {
         switch page {
         case .addDevice:
-            DeviceEditorView()
+            // 推入导航栈时外面已经有栈了，弹 sheet 得自己包一层。
+            NavigationStack { DeviceEditorView(editingID: nil) }
         case .settings:
-            SettingsView()
+            SettingsView(
+                style: model.displayStyle,
+                showMedianSubline: model.showMedianSubline,
+                onStyleChange: { model.setDisplayStyle($0) },
+                onShowMedianChange: { model.setShowMedianSubline($0) }
+            )
         case .replace(let id):
             RecordReplacementView(deviceID: id)
         case .export(let url):
