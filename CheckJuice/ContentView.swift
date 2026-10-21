@@ -136,10 +136,21 @@ struct ContentView: View {
             .navigationTitle("Check Juice")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showingSettings = true
-                    } label: {
-                        Label("设置", systemImage: "gearshape")
+                    HStack(spacing: 6) {
+                        Button {
+                            showingSettings = true
+                        } label: {
+                            Label("设置", systemImage: "gearshape")
+                        }
+                        // 只在开发者模式下显示版本号：普通用户不需要看见它，
+                        // 而调算法时要一眼确认装的是哪一版。
+                        // 构建号不在这儿放 —— 顶栏空间有限，塞多了会挤掉后面的图标。
+                        if model.developerMode {
+                            Text(AppVersion.short)
+                                .font(.caption2)
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
                 ToolbarItemGroup(placement: .primaryAction) {
@@ -269,7 +280,7 @@ private struct ExportSheet: View {
     @Environment(\.dismiss) private var dismiss
     let url: URL
 
-    @State private var content: String = ""
+    @State private var content: AttributedString = AttributedString("读取中…")
     @State private var shareSheet: ActivityItem?
 
     /// `UIActivityViewController` 的 item 需要 identity。
@@ -295,6 +306,9 @@ private struct ExportSheet: View {
 
                     // 预览原文。调算法时最想确定的就是「导出的到底是哪些字段」，
                     // 让它直接可见，比再点一次分享、再打开文件强得多。
+                    //
+                    // 语法着色：键紫 / 字符串红 / 数字蓝 / 字面量橙，
+                    // 几百行 JSON 里找某个字段靠颜色比靠眼睛扫快得多。
                     Text(content)
                         .font(.system(.caption2, design: .monospaced))
                         .textSelection(.enabled)
@@ -322,7 +336,10 @@ private struct ExportSheet: View {
             }
             .task {
                 // 文件不大（几十台设备也就几十 KB），一次读全，不做分页。
-                content = (try? String(contentsOf: url, encoding: .utf8)) ?? "（读取失败）"
+                let raw = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+                content = raw.isEmpty
+                    ? AttributedString("（读取失败）")
+                    : JSONHighlighter.attributed(raw)
             }
             .sheet(item: $shareSheet) { item in
                 ActivityView(url: item.url)
@@ -352,23 +369,32 @@ private struct ActivityView: UIViewControllerRepresentable {
 }
 
 
-/// 两段文字交替显示，交叉淡入淡出。
+/// 两段文字交替显示，交叉淡入淡出，**可点按立即切换**。
 ///
 /// **两段叠在同一个 `ZStack` 里**，而不是 `if/else` 切换：
-/// `if/else` 会让整行宽度在「耗尽中」（3 字）和「还剩 22 分钟」（6 字）之间来回跳，
-/// 每 2 秒抖一次，比不交替还难看。叠放后宽度取两者的最大值，保持稳定。
+/// `if/else` 会让整行宽度在「即将耗尽」（4 字）和「还剩 22 分钟」（6 字）之间来回跳，
+/// 每 3 秒抖一次，比不交替还难看。叠放后宽度取两者的最大值，保持稳定。
 private struct AlternatingText: View {
     let compact: String
     let detail: String
 
     @State private var showingDetail = false
 
-    /// 2 秒一轮，用共享时钟（见 `AlternatingClock`）。
+    /// 点按后暂停自动翻转的截止时刻。
+    ///
+    /// 没有它的话：用户点一下切到「还剩 22 分钟」，0.1 秒后全局心跳到达，
+    /// 立刻又翻回去 —— 看起来像点了没反应。
+    /// 有了它，点完至少停满一个完整周期，节奏才符合预期。
+    @State private var holdUntil: Date = .distantPast
+
+    /// 共享时钟（见 `AlternatingClock`），3 秒一轮。
     ///
     /// 之前写成 `private let ticker = Timer.publish(...)`（每行一个）有两个毛病：
-    /// 1. 视图每次重渲染都会新建 publisher，计时被重置 —— 重渲染比 2 秒频繁时它永远不触发；
+    /// 1. 视图每次重渲染都会新建 publisher，计时被重置 —— 重渲染比周期频繁时它永远不触发；
     /// 2. 多行各自计时，翻转时刻对不齐，屏幕上会看到随机乱闪。
     private let ticker = AlternatingClock.ticker
+
+    private static let period: TimeInterval = 3
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -377,18 +403,27 @@ private struct AlternatingText: View {
             Text(detail)
                 .opacity(showingDetail ? 1 : 0)
         }
-        .animation(.easeInOut(duration: 0.5), value: showingDetail)
+        // 1.0 秒渐变更从容；原来 0.5 秒在 3 秒周期里显得像闪一下。
+        .animation(.easeInOut(duration: 1.0), value: showingDetail)
         .onReceive(ticker) { _ in
+            guard Date() >= holdUntil else { return }
             showingDetail.toggle()
         }
-        // 读屏时别把两段都念一遍：只念具体时长，那是用户真正需要的信息。
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // 点一下立刻切，并从这里重新计一个完整周期。
+            showingDetail.toggle()
+            holdUntil = Date().addingTimeInterval(Self.period)
+        }
+        // 读屏：内容只念具体时长（用户真正需要的信息），并说明可以点按切换。
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(detail)
+        .accessibilityHint("轻点切换显示时长或状态")
     }
 }
 
 
-/// 全局共享的 2 秒心跳。
+/// 全局共享的 3 秒心跳。
 ///
 /// `static let` 只创建一次，所有交替显示的行订阅同一个 publisher ——
 /// 翻转时刻天然对齐，也不会因为重渲染把计时重置。
@@ -396,5 +431,5 @@ private struct AlternatingText: View {
 /// 为什么不用 `TimelineView(.periodic)`：它按时间轴重绘，能算出「该显示第几张」，
 /// 但管不了「两个文本交叉淡入」这个动画状态。这个需求本质上要一个定时器。
 private enum AlternatingClock {
-    static let ticker = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+    static let ticker = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 }

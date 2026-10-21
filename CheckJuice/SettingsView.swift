@@ -113,6 +113,21 @@ struct SettingsView: View {
                     Button("完成") { dismiss() }
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                // 版本信息固定贴在底部：设置页会越来越长，
+                // 塞在列表里得滚到底才看得见，而「装的是哪一版」是要随时能确认的。
+                HStack(spacing: 6) {
+                    Text("Check Juice")
+                    Text(AppVersion.marketing)
+                        .monospacedDigit()
+                    Text("构建 \(AppVersion.build)")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
         }
     }
 }

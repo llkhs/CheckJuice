@@ -21,7 +21,9 @@ packages:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "1.0"
+    # 版本号。CI 会用 GitHub run number 覆盖 CURRENT_PROJECT_VERSION，
+    # 所以本地的 "1" 只是兜底值，实际装到手机的构建号是唯一的。
+    MARKETING_VERSION: "0.1.1"
     CURRENT_PROJECT_VERSION: "1"
     IPHONEOS_DEPLOYMENT_TARGET: "17.0"
     # 允许在 CI 上无签名编译（CODE_SIGNING_ALLOWED=NO 会覆盖这两项）
