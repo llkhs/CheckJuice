@@ -194,14 +194,19 @@ struct ContentView: View {
             } label: {
                 Label("设置", systemImage: "gearshape")
             }
-            // 只在开发者模式下显示版本号：普通用户不需要看见它，
-            // 而调算法时要一眼确认装的是哪一版。
-            // 构建号不在这儿放 —— 顶栏空间有限，塞多了会挤掉后面的图标。
+            // 只在开发者模式下显示。**必须带构建号** —— 调算法时最想确认的
+            // 恰恰是「装的是哪一轮」，只给 `v0.1.1` 等于没给信息。
+            // （真机反馈：用户盯着顶栏看，以为版本号一直没变；
+            //   实际构建号一直是好的，只是这儿没显示。）
             if model.developerMode {
                 Text(AppVersion.short)
                     .font(.caption2)
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
+                    // 构建号每次 +1 时宽度会变（33 → 34 → 100），
+                    // 用等宽数字让变化尽量小，别把后面的图标挤来挤去。
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {

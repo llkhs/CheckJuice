@@ -386,7 +386,16 @@ struct DeviceEditorView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            if notifyLeadHours >= lifeHours {
+            // 提前量为 0 = 这一台的色彩预警被关掉了。
+            // 必须明说：否则用户看到「0 小时」只会以为是「不重要」，
+            // 而它的实际含义是「永远不会变黄」（P10 ≤ 0 才算黄，那时已经耗尽了）。
+            if notifyLeadHours <= 0 {
+                Label("提前量为 0 —— 这个物品不会有黄色提醒，只在已耗尽时变红。",
+                      systemImage: "bell.slash")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+            if notifyLeadHours > 0, notifyLeadHours >= lifeHours {
                 Label("提醒提前量已经不小于电池寿命了 —— 这个物品会一直显示为黄色。"
                       + "短命电池（几小时到几天）建议用小时作单位。",
                       systemImage: "exclamationmark.triangle")
