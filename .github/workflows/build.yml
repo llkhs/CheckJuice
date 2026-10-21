@@ -119,8 +119,16 @@ jobs:
             name_ok=1
           fi
 
-          if [ "$png_ok" -eq 0 ] && [ "$name_ok" -eq 0 ]; then
-            echo "::error::产物里找不到任何 App 图标（既没有 AppIcon*.png，也没有 CFBundleIconName）—— 多半是 project.yml 缺 ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon"
+          # ⚠️ 两个条件**都要**满足，不能用 OR。
+          # 实测过只要 png 就放行的情况：产物里有 2 个 AppIcon*.png、Assets.car 也在，
+          # 但 CFBundleIconName 是空的 —— 上一版校验照样报「通过」，等于漏报。
+          # 而 iOS 11 起系统优先读这个键，App Store 缺它直接 ITMS-90713 打回。
+          if [ "$png_ok" -eq 0 ]; then
+            echo "::error::产物里没有 AppIcon*.png —— 多半是 project.yml 缺 ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon"
+            exit 1
+          fi
+          if [ "$name_ok" -eq 0 ]; then
+            echo "::error::产物 Info.plist 缺 CFBundleIconName —— 图标可能不显示，且 App Store 上传会报 ITMS-90713。多半是 project.yml 缺 INFOPLIST_KEY_CFBundleIconName: AppIcon"
             exit 1
           fi
           # 关键结论抛成 notice：只写进 echo 的话，这一步跑没跑、结果如何，
