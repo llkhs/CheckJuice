@@ -455,7 +455,10 @@ private struct ActivityView: UIViewControllerRepresentable {
         // 呈现/消失进行中，`dismiss()` 会被推迟处理，表现就是「要等一会才能操作」。
         // 真机反馈的两个卡顿（关分享后卡、点完成后卡）都是这个。
         controller.completionWithItemsHandler = { _, _, _, _ in
-            onFinish()
+            // 放到下一个 runloop：这个回调有可能在收尾动画尚未结束时触发，
+            // 此刻直接改状态会让 SwiftUI 再发一次 dismiss，
+            // 打出 "Attempt to dismiss while a presentation is in progress"。
+            DispatchQueue.main.async { onFinish() }
         }
         return controller
     }
