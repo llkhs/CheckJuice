@@ -5,13 +5,18 @@ name: Core Tests
 on:
   push:
     branches: [master]
-    paths-ignore:
-      - '**.md'          # 文档改动不触发。Swift 代码和 reference/ 才是输入
-      - '.gitignore'
+    # 白名单：只有这几个输入能影响「算法算得对不对」。
+    # 用 paths 而不是 paths-ignore —— 后者是黑名单，只要改个 UI 文件也会触发，
+    # 而 Core 包一根毛都没动，纯烧 runner。
+    paths:
+      - 'CheckJuiceCore/**'        # 包本身（含测试）
+      - 'reference/**'             # Python 参考实现，黄金数值的来源
+      - '.github/workflows/core-tests.yml'
   pull_request:
-    paths-ignore:
-      - '**.md'
-      - '.gitignore'
+    paths:
+      - 'CheckJuiceCore/**'
+      - 'reference/**'
+      - '.github/workflows/core-tests.yml'
   workflow_dispatch:
 
 concurrency:

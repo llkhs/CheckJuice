@@ -5,15 +5,22 @@ name: Build
 on:
   push:
     branches: [main, master]
-    paths-ignore:
-      - '**.md'          # 文档改了跟编译无关，别占 runner
-      - 'reference/**'   # Python 参考实现只服务 Core Tests，不影响 App 构建
-      - '.gitignore'
+    # 白名单：能影响「编不编得过」的输入。
+    paths:
+      - 'CheckJuice/**'            # App 源码 + 资源
+      - 'CheckJuiceWidget/**'      # 小组件扩展
+      - 'CheckJuiceCore/**'        # SPM 本地依赖 —— 改了必须重新编译
+      - 'project.yml'              # XcodeGen 工程定义
+      - '.github/workflows/build.yml'
+      - '.github/scripts/**'
   pull_request:
-    paths-ignore:
-      - '**.md'
-      - 'reference/**'
-      - '.gitignore'
+    paths:
+      - 'CheckJuice/**'
+      - 'CheckJuiceWidget/**'
+      - 'CheckJuiceCore/**'
+      - 'project.yml'
+      - '.github/workflows/build.yml'
+      - '.github/scripts/**'
   workflow_dispatch:
 
 concurrency:
