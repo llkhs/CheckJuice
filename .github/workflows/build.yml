@@ -97,6 +97,20 @@ jobs:
             echo "::error::build/Build/Products 下找不到任何 .app/.appex，构建可能更早就失败了"
           fi
 
+      - name: 打印产物的版本号
+        # 用户反馈「这几轮的版本号和构建号都没变」，而 CI 明明传了
+        # CURRENT_PROJECT_VERSION=run_number。不能猜，把实际产物的真实取值打出来。
+        if: always()
+        run: |
+          APP=$(find build/Build/Products -maxdepth 4 -name 'CheckJuice.app' | head -1)
+          if [ -z "$APP" ]; then
+            echo "::warning::找不到 CheckJuice.app，跳过版本号检查"
+            exit 0
+          fi
+          SHORT=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist" 2>/dev/null || echo '（缺）')
+          BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist" 2>/dev/null || echo '（缺）')
+          echo "::notice::产物版本 CFBundleShortVersionString=$SHORT  CFBundleVersion=$BUILD  （本次 run_number=${{ github.run_number }}）"
+
       - name: 图标相关文件有没有改过
         id: icon_changed
         # 图标是**静态配置**：改功能代码时它不会变。每次构建都查一遍纯属浪费，
