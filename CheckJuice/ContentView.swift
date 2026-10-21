@@ -422,7 +422,11 @@ private struct ExportSheet: View {
                 }.value
             }
             .sheet(item: $shareSheet) { item in
-                ActivityView(url: item.url)
+                ActivityView(url: item.url) {
+                    // 面板一结束就清掉绑定，否则状态里留着一个「幽灵 sheet」，
+                    // 后续 dismiss() 会被 presentation 层推迟。
+                    shareSheet = nil
+                }
             }
         }
     }
@@ -435,9 +439,25 @@ private struct ExportSheet: View {
 /// 屏幕中部的 popover 配置，`TARGETED_DEVICE_FAMILY` 含 iPad，必须处理。
 private struct ActivityView: UIViewControllerRepresentable {
     let url: URL
+    /// 分享面板结束时回调 —— 用来把 SwiftUI 那边的绑定清空。
+    let onFinish: () -> Void
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: [url],
+                                                  applicationActivities: nil)
+        // ⚠️ **必须自己清绑定**。
+        //
+        // 用户在分享面板里点「取消」或完成一项后，UIKit 会自己把面板收掉，
+        // 但 SwiftUI 这边的 `.sheet(item: $shareSheet)` **不知道**它已经消失，
+        // `shareSheet` 仍然是非 nil —— 状态里就留着一个「已呈现但实际不存在」的 sheet。
+        //
+        // 后果：之后点导出页左上角的「完成」时，presentation 层认为还有一次
+        // 呈现/消失进行中，`dismiss()` 会被推迟处理，表现就是「要等一会才能操作」。
+        // 真机反馈的两个卡顿（关分享后卡、点完成后卡）都是这个。
+        controller.completionWithItemsHandler = { _, _, _, _ in
+            onFinish()
+        }
+        return controller
     }
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
