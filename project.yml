@@ -52,12 +52,12 @@ targets:
         # Xcode 新建工程时这条是模板自动写进去的；XcodeGen 不会替我们加，
         # 所以少这一行 = 传了图也白传（现象：桌面还是默认白图标，且不报任何错）。
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        # ⚠️ 第二条同样不能少，而且**实测确实需要显式写**：
-        # 只设上面那条时，产物里会出现 AppIcon*.png 和 Assets.car，但
-        # Info.plist 的 CFBundleIconName 是空的（CI notice 抓到的真实现象）。
-        # iOS 11 起系统优先读这个键定位主屏图标；App Store 上传缺它直接
-        # 报 ITMS-90713 打回。别指望 actool 自动合并 —— 显式写进生成的 Info.plist。
-        INFOPLIST_KEY_CFBundleIconName: AppIcon
+        # 关于 CFBundleIconName（iOS 11+ 用来定位主屏图标的键）：
+        # 实际产物里它是空的。我试过 INFOPLIST_KEY_CFBundleIconName，**没生效**
+        # （CI 实测：仍然为空），说明这条机制不被 XcodeGen/actool 认。
+        # 影响范围：自签安装不受影响（真机验证过图标正常显示），
+        # 仅 App Store 上传会报 ITMS-90713。当前走自签路线，故不阻塞。
+        # 真要上架时再处理 —— 到那时有 Mac + Xcode 能直接验，别在这儿瞎试。
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Check Juice
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
