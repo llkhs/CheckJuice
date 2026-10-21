@@ -256,6 +256,7 @@ public extension Prediction {
         if minutes >= 1 {
             return exhausted ? "耗尽中 \(minutes) 分钟" : "还剩 \(minutes) 分钟"
         }
+        // 别再拼「还剩 不足 1 分钟」——「还剩」+「不足」两个词叠在一起不通顺。
         return exhausted ? "刚刚耗尽" : "不足 1 分钟"
     }
 
@@ -277,19 +278,20 @@ public extension Prediction {
 
     /// 交替显示时的**短状态词**。
     ///
-    /// **已耗尽和快耗尽必须用不同的词**：
-    /// - 还没到（剩余 ≥ 0）→「即将耗尽」，是预警；
-    /// - 已经过（剩余 < 0）→「耗尽中」，是既成事实。
+    /// 只在**还没耗尽**时使用：「即将耗尽」↔「还剩 22 分钟」，是预警。
     ///
-    /// 混用会把「还有 12 分钟可用」说成「已经没电」，跟「还剩 0 小时」是同一类错误
-    /// （都是把「快没了」说成「没了」）。这两件事用户该做的动作完全不同：
-    /// 一个是准备更换，一个是已经该换了。
+    /// ⚠️ 已耗尽的情况**不参与交替**（见 `shouldAlternate`）：
+    /// 那时完整文案本身就是「耗尽中 7 分钟」，前面再加一个「耗尽中」的状态词，
+    /// 交替起来就成了「耗尽中」⇄「耗尽中 7 分钟」—— 用户在界面上看到的就是这个结巴。
+    /// 状态词和完整文案共用同一个前缀，本来就该合并成一句。
     public static let preExhaustWord = "即将耗尽"
-    public static let exhaustedWord = "耗尽中"
 
-    /// 这一条在交替时该显示哪个短状态词。
-    public var alternatingStatusWord: String {
-        p10RemainingHours < 0 ? Self.exhaustedWord : Self.preExhaustWord
+    /// 这一条要不要交替显示。
+    ///
+    /// 除了「剩余够短」，还必须**还没耗尽** —— 已耗尽时完整文案自带「耗尽中」前缀，
+    /// 再叠一个状态词就是重复说明。
+    public var shouldAlternate: Bool {
+        needsAlternatingDisplay && p10RemainingHours >= 0
     }
 
     /// 风险窗口起点（P10）的文本 —— 「最早可能耗尽」。

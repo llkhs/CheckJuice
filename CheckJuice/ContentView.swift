@@ -241,9 +241,11 @@ struct DeviceRow: View {
                 // 目的是**省横向空间**：短命电池的文案会从「还剩 22 分钟」这种
                 // 六七个字压成两个字，让同一行能装下更多信息。
                 // 代价是两段文字要交替出现，看的人需要多扫一眼。
-                if style == .remaining, item.prediction.needsAlternatingDisplay {
+                // 只在**还没耗尽**时交替：已耗尽时完整文案本身就带「耗尽中」前缀，
+                // 再叠一个状态词，屏幕上就是「耗尽中」⇄「耗尽中 7 分钟」的结巴。
+                if style == .remaining, item.prediction.shouldAlternate {
                     AlternatingText(
-                        compact: item.prediction.alternatingStatusWord,
+                        compact: Prediction.preExhaustWord,
                         detail: item.prediction.remainingText(style: style)
                     )
                     .font(.title3)
