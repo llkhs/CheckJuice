@@ -222,7 +222,25 @@ final class AppModel {
         /// （P10 掉到 3 小时？还是提前提醒量被设成 800 小时？）。
         /// 所以把判定依据和阈值一起带上。
         var status: ExportStatus
+        /// 首页上**实际渲染出来的文字**。
+        ///
+        /// 光有数字不够用：显示层有单位自适应、有负数措辞、有「不足 1 分钟」这类
+        /// 兜底分支，这些逻辑出错时只看数字是发现不了的 ——
+        /// 之前「还剩 0 小时」那个 bug 就是这么漏过去的。
+        /// 把渲染结果一起导出来，**看到的就是用户看到的**。
+        var rendered: ExportRendered
         var daysLeftInTrash: Int?
+    }
+
+    /// 屏幕上那两行字的原文。
+    private struct ExportRendered: Encodable {
+        /// 显示样式本身（剩余时长 / 耗尽时刻）—— 同一份数据在不同样式下文字完全不同。
+        var style: ExhaustDisplayStyle
+        /// 大号主文案，就是用户一眼看到的那个。
+        var headline: String
+        /// 副行（中位）。`showMedianSubline` 关掉时界面不显示，这里也不给。
+        var medianLine: String?
+        var showMedianSubline: Bool
     }
 
     /// 颜色标签的完整描述。**这是给人看的，不是给机器看的。**
@@ -298,6 +316,14 @@ final class AppModel {
                     ),
                     status: Self.exportStatus(for: pair.prediction,
                                               device: pair.device),
+                    rendered: ExportRendered(
+                        style: displayStyle,
+                        headline: pair.prediction.remainingText(style: displayStyle),
+                        medianLine: showMedianSubline
+                            ? pair.prediction.medianText(style: displayStyle)
+                            : nil,
+                        showMedianSubline: showMedianSubline
+                    ),
                     daysLeftInTrash: trashedDays[pair.device.id]
                 )
             }

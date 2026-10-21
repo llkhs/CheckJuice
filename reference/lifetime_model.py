@@ -422,27 +422,46 @@ def format_remaining_short(hours: float) -> str:
     单位自适应，不让 5 号电池显示「还剩 1443 小时」这种假精度：
       * |h| >= 1440（60 天）→ 「约 N 个月」
       * |h| >= 48  （2 天）  → 「约 N 天」
-      * 否则                → 「还剩 N 小时」
+      * |h| >= 1   （1 小时）→ 「还剩 N 小时」
+      * |h| >= 1 分钟        → 「还剩 N 分钟」
+      * 更小                 → 「不足 1 分钟」
 
     负数（已耗尽）走同一套量级分支，只是措辞换成「耗尽中」且**不加「约」**——
     耗尽多久是既成事实，不需要修饰；「耗尽中 3 个月」也比「耗尽中 2160 小时」好读。
+
+    **符号必须用原始值判断，不能先 whole_hours 截断**：
+    whole_hours(-0.892) == 0，那样「已耗尽 53 分钟」会显示成「还剩 0 小时」——
+    已经没电了却告诉用户还剩着。真机反馈过这个 bug（两个方向都是它）。
+
+    不足 1 小时改用分钟，是因为 1 小时的电池还剩 22 分钟时显示「还剩 0 小时」，
+    用户分不出「马上没电」和「真的没了」，而这两件事该做的事完全不同。
+
     与 Swift 的 `Prediction.adaptiveHours` 必须逐字符一致。
     """
-    h = whole_hours(hours)
-    magnitude = abs(h)
+    if not math.isfinite(hours):
+        return "—"
+
+    exhausted = hours < 0
+    magnitude = abs(hours)
 
     if magnitude >= 1440:
-        n, unit = magnitude // 720, "个月"      # 一个月按 30 天算
-    elif magnitude >= 48:
-        n, unit = magnitude // 24, "天"
-    else:
-        n, unit = magnitude, "小时"
+        n, unit = int(magnitude // 720), "个月"      # 一个月按 30 天算
+        prefix = "耗尽中" if exhausted else "约"
+        return f"{prefix} {n} {unit}"
+    if magnitude >= 48:
+        n, unit = int(magnitude // 24), "天"
+        prefix = "耗尽中" if exhausted else "约"
+        return f"{prefix} {n} {unit}"
+    if magnitude >= 1:
+        n = int(magnitude)                           # 朝零截断
+        prefix = "耗尽中" if exhausted else "还剩"
+        return f"{prefix} {n} 小时"
 
-    if h < 0:
-        return f"耗尽中 {n} {unit}"      # 耗尽已是既成事实，不加「约」
-    if unit == "小时":
-        return f"还剩 {n} 小时"
-    return f"约 {n} {unit}"
+    minutes = int(magnitude * 60)
+    if minutes >= 1:
+        prefix = "耗尽中" if exhausted else "还剩"
+        return f"{prefix} {minutes} 分钟"
+    return "刚刚耗尽" if exhausted else "不足 1 分钟"
 
 
 URGENCY_LABEL = {

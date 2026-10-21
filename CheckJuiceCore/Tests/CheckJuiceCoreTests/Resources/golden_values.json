@@ -387,6 +387,38 @@
       "sigmaWithin": 0.15,
       "urgency": "normal"
     },
+    "minuteBattery": {
+      "ageHours": 0.1,
+      "confidence": "low",
+      "events": [
+        {
+          "at": "2026-10-14T11:54:00",
+          "type": "initial"
+        }
+      ],
+      "headlineRemaining": "还剩 18 分钟",
+      "installedAt": "2026-10-14T11:54:00",
+      "intervals": [],
+      "m": 0.0,
+      "medianHours": 1.0,
+      "medianLineRemaining": "中位 · 还剩 54 分钟",
+      "nEff": 0.0,
+      "nObserved": 0,
+      "name": "一小时电池",
+      "nominalLifeHours": 1.0,
+      "notifyLeadHours": 336.0,
+      "p10ExhaustAt": "2026-10-14T12:18:27.921933",
+      "p10Hours": 0.40775609248283146,
+      "p10RemainingHours": 0.3077560925,
+      "p50ExhaustAt": "2026-10-14T12:54:00",
+      "ratio": 0.1,
+      "referencePrior": null,
+      "remainingHours": 0.9,
+      "sigmaPost": 0.5,
+      "sigmaPred": 0.7,
+      "sigmaWithin": 0.5,
+      "urgency": "stockUp"
+    },
     "misTap": {
       "ageHours": 0.5,
       "confidence": "low",

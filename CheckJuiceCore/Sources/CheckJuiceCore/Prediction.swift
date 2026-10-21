@@ -225,16 +225,38 @@ public extension Prediction {
     /// 耗尽 3 个月说「耗尽中 3 个月」，不说「耗尽中 2160 小时」。
     /// 与 Python 的 `format_remaining_short` 必须逐字符一致（黄金数值会断言）。
     static func adaptiveHours(_ hours: Double) -> String {
-        let h = LifetimeModel.wholeHours(hours)
-        let (count, unit) = DurationText.magnitudeSplit(h)
+        guard hours.isFinite else { return "—" }
 
-        if h < 0 {
-            return "耗尽中 \(count) \(unit)"   // 耗尽已是既成事实，不加「约」
+        // ⚠️ **符号必须用原始值判断，不能先截断。**
+        // 旧实现先 `wholeHours(-0.892)` → 0，于是「已耗尽 53 分钟」会显示成
+        // 「还剩 0 小时」—— 已经没电了却告诉用户还剩着。
+        let exhausted = hours < 0
+        let magnitude = abs(hours)
+
+        if magnitude >= 1440 {
+            let n = Int(magnitude / 720)
+            return exhausted ? "耗尽中 \(n) 个月" : "约 \(n) 个月"
         }
-        if unit == "小时" {
-            return "还剩 \(count) 小时"
+        if magnitude >= 48 {
+            let n = Int(magnitude / 24)
+            return exhausted ? "耗尽中 \(n) 天" : "约 \(n) 天"
         }
-        return "约 \(count) \(unit)"
+        if magnitude >= 1 {
+            let n = Int(magnitude)              // 朝零截断，与 `wholeHours` 同口径
+            return exhausted ? "耗尽中 \(n) 小时" : "还剩 \(n) 小时"
+        }
+
+        // 不足 1 小时改用分钟。
+        //
+        // **为什么必须有这一档**：真机反馈里，1 小时的电池还剩 22 分钟时显示
+        // 「还剩 0 小时」。用户分不出「马上没电」和「真的没了」，
+        // 而这两个状态该做的事完全不同（一个该准备换，一个该已经换了）。
+        // 短命电池是这个 App 的主力场景，这一档不能省。
+        let minutes = Int(magnitude * 60)
+        if minutes >= 1 {
+            return exhausted ? "耗尽中 \(minutes) 分钟" : "还剩 \(minutes) 分钟"
+        }
+        return exhausted ? "刚刚耗尽" : "不足 1 分钟"
     }
 
     /// 风险窗口起点（P10）的文本 —— 「最早可能耗尽」。

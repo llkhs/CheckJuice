@@ -2,36 +2,38 @@ import Foundation
 
 /// 把「小时数」写成人话。
 ///
-/// 内部的量纲始终是小时，这里只负责显示换算 —— 与 `Prediction` 共用同一套分档阈值，
-/// 免得两处各自写一遍、改一处漏一处（`ContentView.elapsedText` 原本就是第二份拷贝）。
+/// 内部的量纲始终是小时，这里只负责显示换算。
+///
+/// ⚠️ 分档阈值与 `Prediction.adaptiveHours` **必须保持一致**，
+/// 但**不要再抽一个共用的 `magnitudeSplit`** —— 两者的措辞规则不同
+/// （这个说「多长」，那个说「还剩 / 约 / 耗尽中」），
+/// 硬抽成共用函数只会让两边都变难读。真要改档位，两处一起改，`RemainingTextTests` 会盯着。
 public enum DurationText {
 
-    /// 一段长度（间隔、已用时长）：`2 小时` / `3 天` / `5 个月`。
+    /// 一段长度（间隔、已用时长）：`2 小时` / `3 天` / `5 个月` / `22 分钟`。
     ///
     /// 与 `Prediction.adaptiveHours` 的区别只在措辞：那个描述「距离耗尽」，
     /// 会带「还剩 / 约」；这里只回答「多长」。负数表示已超出，带「超出」前缀。
     public static func short(_ hours: Double) -> String {
-        let h = LifetimeModel.wholeHours(hours)
-        let (count, unit) = magnitudeSplit(h)
-        return h < 0 ? "超出 \(count) \(unit)" : "\(count) \(unit)"
-    }
+        guard hours.isFinite else { return "—" }
 
-    /// 量纲分档。**只在这里写一次阈值**：`adaptiveHours` 与 `short` 都用它。
-    ///
-    /// * ≥ 60 天 → 月（`count = h / 720`，一个月按 30 天算）
-    /// * ≥ 2 天 → 天
-    /// * 其余 → 小时
-    ///
-    /// 分档的目的是**不报假精度**：5 号电池剩 1440 小时，但 P10~P90 跨了 600 小时，
-    /// 印「还剩 1443 小时」是在撒谎。
-    static func magnitudeSplit(_ wholeHours: Int) -> (count: Int, unit: String) {
-        let magnitude = abs(wholeHours)
+        // 符号用原始值判断，不能先截断 —— `wholeHours(-0.9)` == 0，
+        // 那样「超出 54 分钟」会变成「0 小时」。
+        let exceeded = hours < 0
+        let magnitude = abs(hours)
+
+        let body: String
         if magnitude >= 1440 {
-            return (magnitude / 720, "个月")
+            body = "\(Int(magnitude / 720)) 个月"      // 一个月按 30 天算
+        } else if magnitude >= 48 {
+            body = "\(Int(magnitude / 24)) 天"
+        } else if magnitude >= 1 {
+            body = "\(Int(magnitude)) 小时"            // 朝零截断
+        } else {
+            // 不足 1 小时改用分钟。没有这一档时，「已用 22 分钟」会显示成「已用 0 小时」。
+            let minutes = Int(magnitude * 60)
+            body = minutes >= 1 ? "\(minutes) 分钟" : "不足 1 分钟"
         }
-        if magnitude >= 48 {
-            return (magnitude / 24, "天")
-        }
-        return (magnitude, "小时")
+        return exceeded ? "超出 \(body)" : body
     }
 }
