@@ -305,8 +305,13 @@ final class BehaviourTests: XCTestCase {
 
     /// 单位自适应的边界。纯函数，直接喂数最清楚。
     func testAdaptiveHoursUnits() {
-        // 阈值：< 2 天报小时，2~60 天报天，≥ 60 天报月。
-        XCTAssertEqual(Prediction.adaptiveHours(0), "还剩 0 小时")
+        // 阈值：< 1 小时报分钟，< 2 天报小时，2~60 天报天，≥ 60 天报月。
+        //
+        // ⚠️ 这里原本断言 `adaptiveHours(0) == "还剩 0 小时"` —— 那是在守护一个旧 bug：
+        // 当时先 wholeHours 截断再判符号，导致「还剩 22 分钟」和「已耗尽 53 分钟」
+        // 都显示成「还剩 0 小时」。0 属于「不足 1 分钟」这一档，不该说成 0 小时。
+        // （详细的档位用例在 RemainingTextTests。）
+        XCTAssertEqual(Prediction.adaptiveHours(0), "不足 1 分钟")
         XCTAssertEqual(Prediction.adaptiveHours(47.9), "还剩 47 小时")
         XCTAssertEqual(Prediction.adaptiveHours(48), "约 2 天")
         XCTAssertEqual(Prediction.adaptiveHours(1439), "约 59 天")
