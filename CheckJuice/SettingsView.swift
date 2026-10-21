@@ -64,6 +64,26 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Picker("排序方式", selection: Binding(
+                        get: { model.sortMode },
+                        set: { model.setSortMode($0) }
+                    )) {
+                        ForEach(SortMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    Toggle("开发者模式", isOn: Binding(
+                        get: { model.developerMode },
+                        set: { model.setDeveloperMode($0) }
+                    ))
+                } header: {
+                    Text("列表")
+                } footer: {
+                    Text("排序只影响 App 里的列表 —— 小组件只有三行，永远按紧急度取最急的。\n"
+                         + "开发者模式会在主页多一个导出按钮，把全部原始数据和预测结果导成 JSON。")
+                }
+
+                Section {
                     NavigationLink {
                         TrashView()
                     } label: {

@@ -14,6 +14,8 @@ import CheckJuiceCore
 public enum DisplaySettings {
     private static let styleKey = "displayStyle"
     private static let showMedianKey = "showMedianSubline"
+    private static let sortModeKey = "sortMode"
+    private static let developerModeKey = "developerMode"
 
     /// App Group 未配置时（未签名的调试构建）`UserDefaults(suiteName:)` 会返回 nil，
     /// 退回标准域 —— 让代码在没签名的情况下也能跑，不至于一开就崩。
@@ -43,5 +45,27 @@ public enum DisplaySettings {
             return defaults.bool(forKey: showMedianKey)
         }
         set { defaults.set(newValue, forKey: showMedianKey) }
+    }
+
+    /// 首页列表的排序方式。默认按紧急度。
+    ///
+    /// 存共享域而不是标准域：虽然今天只有 App 用，但跟其它显示设置放一起，
+    /// 少一个「为什么这个键在这儿、那个键在那儿」的疑问。
+    public static var sortMode: SortMode {
+        get {
+            guard let raw = defaults.string(forKey: sortModeKey),
+                  let value = SortMode(rawValue: raw)
+            else { return .urgency }
+            return value
+        }
+        set { defaults.set(newValue.rawValue, forKey: sortModeKey) }
+    }
+
+    /// 开发者模式。打开后主页多一个「导出」按钮。
+    ///
+    /// 默认关。这不是给普通用户的功能，默认开着只会让工具栏多一个看不懂的图标。
+    public static var developerMode: Bool {
+        get { defaults.bool(forKey: developerModeKey) }
+        set { defaults.set(newValue, forKey: developerModeKey) }
     }
 }

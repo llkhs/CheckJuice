@@ -52,7 +52,7 @@ struct CheckJuiceWidgetView: View {
                 ForEach(Array(entry.snapshot.devices.prefix(3))) { device in
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(device.urgency.tint)
+                            .fill(device.level.tint)
                             .frame(width: 8, height: 8)
                         Text(device.name)
                             .font(.caption)
@@ -62,7 +62,7 @@ struct CheckJuiceWidgetView: View {
                             .font(.caption)
                             .monospacedDigit()
                             .fontWeight(.semibold)
-                            .foregroundStyle(device.urgency.tint)
+                            .foregroundStyle(device.level.tint)
                     }
                 }
                 if entry.snapshot.devices.count > 3 {
@@ -78,13 +78,15 @@ struct CheckJuiceWidgetView: View {
 }
 
 /// 小组件扩展里 `Color` 同样是 SwiftUI 的东西，所以这里要有一份和 App 层一致的映射。
-extension Urgency {
+///
+/// **三级**，跟 App 列表用同一套判据（`DisplayLevel`，在主 App 里算好写进快照）。
+/// 以前这里是四级的 `Urgency` 配色，其中橙色「风险窗口」已并进黄色。
+extension DisplayLevel {
     var tint: Color {
         switch self {
-        case .overdue: return .red
-        case .risk: return .orange
-        case .stockUp: return .yellow
-        case .normal: return .green
+        case .exhausted: return .red
+        case .soon: return .yellow
+        case .normal: return .secondary
         }
     }
 }

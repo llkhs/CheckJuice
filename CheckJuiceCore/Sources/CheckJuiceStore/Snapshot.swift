@@ -9,6 +9,11 @@ public struct DeviceSnapshot: Codable, Hashable, Identifiable, Sendable {
     public var id: UUID
     public var name: String
     public var urgency: Urgency
+    /// 上屏颜色分级（三级：耗尽 / 该处理 / 正常）。
+    ///
+    /// **在主 App 里算好写进快照**，跟 `headline` 同一个理由：小组件不跑算法。
+    /// 也算是一种契约保护 —— 配色规则改了只改一处，不会出现 App 和桌面不一致。
+    public var level: DisplayLevel
     public var remainingHours: Double
     public var p10RemainingHours: Double
     public var p50ExhaustAt: Date
@@ -21,13 +26,14 @@ public struct DeviceSnapshot: Codable, Hashable, Identifiable, Sendable {
     public var headline: String
 
     public init(
-        id: UUID, name: String, urgency: Urgency,
+        id: UUID, name: String, urgency: Urgency, level: DisplayLevel,
         remainingHours: Double, p10RemainingHours: Double, p50ExhaustAt: Date,
         confidence: Confidence, headline: String
     ) {
         self.id = id
         self.name = name
         self.urgency = urgency
+        self.level = level
         self.remainingHours = remainingHours
         self.p10RemainingHours = p10RemainingHours
         self.p50ExhaustAt = p50ExhaustAt
@@ -50,6 +56,8 @@ public struct DeviceSnapshot: Codable, Hashable, Identifiable, Sendable {
             id: device.id,
             name: device.name,
             urgency: prediction.urgency,
+            level: DisplayLevel.make(prediction: prediction,
+                                     notifyLeadHours: device.notifyLeadHours),
             remainingHours: prediction.remainingHours,
             p10RemainingHours: prediction.p10RemainingHours,
             p50ExhaustAt: prediction.p50ExhaustAt,

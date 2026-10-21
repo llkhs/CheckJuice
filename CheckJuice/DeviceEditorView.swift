@@ -366,7 +366,7 @@ struct DeviceEditorView: View {
                     .foregroundStyle(.secondary)
             }
             if notifyLeadHours >= lifeHours {
-                Label("提醒提前量已经不小于电池寿命了 —— 这个物品会一直处于「该备货」状态。"
+                Label("提醒提前量已经不小于电池寿命了 —— 这个物品会一直显示为黄色。"
                       + "短命电池（几小时到几天）建议用小时作单位。",
                       systemImage: "exclamationmark.triangle")
                     .font(.caption)
@@ -375,7 +375,7 @@ struct DeviceEditorView: View {
         } header: {
             Text("提前多久提醒")
         } footer: {
-            Text("留出下单 / 出门采购的时间。距风险窗口（最坏情况）不足这个提前量时，"
+            Text("只影响颜色，不参与「还剩多久」的计算。距风险窗口（最坏情况）不足这个提前量时，"
                  + "主页和小组件会变黄。")
         }
     }

@@ -90,6 +90,7 @@ final class StoreTests: XCTestCase {
                     id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
                     name: "电子秤",
                     urgency: .stockUp,
+                    level: .soon,
                     remainingHours: 41.6,
                     p10RemainingHours: 30.5,
                     p50ExhaustAt: Date(timeIntervalSince1970: 1_700_600_000),
@@ -106,6 +107,7 @@ final class StoreTests: XCTestCase {
         let device = try XCTUnwrap(back.devices.first)
         XCTAssertEqual(device.name, "电子秤")
         XCTAssertEqual(device.urgency, .stockUp)
+        XCTAssertEqual(device.level, .soon, "分级是 App 与 Widget 的配色契约")
         XCTAssertEqual(device.confidence, .medium)
         XCTAssertEqual(device.headline, "将在 11月1日 周六 08:00 耗尽")
         XCTAssertEqual(device.remainingHours, 41.6, accuracy: 1e-9)

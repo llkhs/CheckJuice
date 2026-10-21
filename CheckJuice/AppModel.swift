@@ -12,6 +12,13 @@ struct RankedDevice: Identifiable {
     var device: Device
     var prediction: Prediction
     var id: UUID { device.id }
+
+    /// 上屏颜色分级。跟小组件用的是同一套判据（`DisplayLevel`），
+    /// 不会出现「App 里黄、桌面上绿」这种两处走样。
+    var level: DisplayLevel {
+        DisplayLevel.make(prediction: prediction,
+                          notifyLeadHours: device.notifyLeadHours)
+    }
 }
 
 /// 主 App 的状态中枢。
@@ -45,6 +52,12 @@ final class AppModel {
 
     /// 列表主文案下面那行「中位」小字是否显示。
     var showMedianSubline: Bool = DisplaySettings.showMedian
+
+    /// 首页排序方式。
+    var sortMode: SortMode = DisplaySettings.sortMode
+
+    /// 开发者模式：打开后主页多一个导出按钮。
+    var developerMode: Bool = DisplaySettings.developerMode
 
     init() {
         devices = deviceStore.load()
@@ -96,18 +109,52 @@ final class AppModel {
         DisplaySettings.showMedian = show
     }
 
-    /// 全部设备按紧急度排序 —— 最该处理的排最前。
+    /// 切换排序方式。只影响 App 列表 —— 小组件只有三行，永远按紧急度取最急的。
+    func setSortMode(_ mode: SortMode) {
+        guard mode != sortMode else { return }
+        sortMode = mode
+        DisplaySettings.sortMode = mode
+    }
+
+    func setDeveloperMode(_ enabled: Bool) {
+        guard enabled != developerMode else { return }
+        developerMode = enabled
+        DisplaySettings.developerMode = enabled
+    }
+
+    /// 全部设备按当前排序方式排列。
     ///
     /// 只看 `activeDevices`：回收站里的东西不该再占着主页、更不该进风险排序。
     var ranked: [RankedDevice] {
-        engine.predictions(for: activeDevices, now: Date())
+        let items = engine.predictions(for: activeDevices, now: Date())
             .map { RankedDevice(device: $0.device, prediction: $0.prediction) }
-            .sorted { lhs, rhs in
+
+        switch sortMode {
+        case .urgency:
+            return items.sorted { lhs, rhs in
                 let a = Self.rank(lhs.prediction.urgency)
                 let b = Self.rank(rhs.prediction.urgency)
                 if a != b { return a < b }
                 return lhs.prediction.remainingHours < rhs.prediction.remainingHours
             }
+        case .remaining:
+            // 按**屏幕上那个数**排（P10 剩余）。用户看到「还剩 30 小时」排在
+            // 「还剩 90 小时」前面才符合直觉；拿中位排会出现肉眼看起来乱序。
+            return items.sorted { $0.prediction.p10RemainingHours < $1.prediction.p10RemainingHours }
+        case .name:
+            return items.sorted {
+                $0.device.name.localizedStandardCompare($1.device.name) == .orderedAscending
+            }
+        case .recent:
+            return items.sorted { Self.createdAt($0.device) > Self.createdAt($1.device) }
+        }
+    }
+
+    /// 「添加时间」= 最早那条记录的时刻（也就是创建时填的基准点）。
+    ///
+    /// 不用 `id` 或文件顺序：那两者都对用户不可见，也没法解释「为什么这台排前面」。
+    private static func createdAt(_ device: Device) -> Date {
+        device.sortedEvents.first?.at ?? .distantPast
     }
 
     private static func rank(_ urgency: Urgency) -> Int {
@@ -179,6 +226,107 @@ final class AppModel {
         devices.removeAll(where: \.isTrashed)
         commit()
     }
+
+    // MARK: - 导出（开发者模式）
+
+    /// 导出包。字段刻意用 `Codable` 结构体而不是手搓字典 ——
+    /// 手搓的话改个字段名编译器不管，导出的 JSON 会静默少一列。
+    private struct ExportBundle: Encodable {
+        var exportedAt: Date
+        /// 当时生效的模型参数。**必须带上**：光有数据没有参数，
+        /// 复现问题时还得回忆「那时候跑的是哪套 beta / z10」。
+        var modelConfig: ModelConfig
+        /// 显示层设置，用来区分「算法结果」和「只是显示规则不同」。
+        var displayStyle: ExhaustDisplayStyle
+        var sortMode: SortMode
+        var devices: [ExportDevice]
+    }
+
+    private struct ExportDevice: Encodable {
+        /// 原始设备，含 `events` 的**精确时刻** —— 这是复现算法的唯一依据。
+        /// 只导算好的结论没法复现任何东西。
+        var device: Device
+        var prediction: ExportPrediction
+        var level: DisplayLevel
+        var daysLeftInTrash: Int?
+    }
+
+    private struct ExportPrediction: Encodable {
+        var medianHours: Double
+        var p10Hours: Double
+        var p50ExhaustAt: Date
+        var p10ExhaustAt: Date
+        var remainingHours: Double
+        var p10RemainingHours: Double
+        var ageHours: Double
+        var ratio: Double
+        var sigmaPrediction: Double
+        var urgency: Urgency
+        var confidence: Confidence
+        var posterior: Posterior
+    }
+
+    /// 生成导出文件，返回可分享的临时文件 URL。
+    ///
+    /// 每次调用都重新写一份：数据量只有几十台，没必要做缓存失效逻辑。
+    func makeExportFile() throws -> URL {
+        let now = Date()
+        let pairs = engine.predictions(for: activeDevices, now: now)
+        let reference = engine.predictions(for: devices, now: now)
+        let trashedDays = Dictionary(
+            uniqueKeysWithValues: reference
+                .filter { $0.device.isTrashed }
+                .map { ($0.device.id, $0.device.daysLeftInTrash(now: now)) }
+        )
+
+        let bundle = ExportBundle(
+            exportedAt: now,
+            modelConfig: engine.config,
+            displayStyle: displayStyle,
+            sortMode: sortMode,
+            devices: pairs.map { pair in
+                ExportDevice(
+                    device: pair.device,
+                    prediction: ExportPrediction(
+                        medianHours: pair.prediction.medianHours,
+                        p10Hours: pair.prediction.p10Hours,
+                        p50ExhaustAt: pair.prediction.p50ExhaustAt,
+                        p10ExhaustAt: pair.prediction.p10ExhaustAt,
+                        remainingHours: pair.prediction.remainingHours,
+                        p10RemainingHours: pair.prediction.p10RemainingHours,
+                        ageHours: pair.prediction.ageHours,
+                        ratio: pair.prediction.ratio,
+                        sigmaPrediction: pair.prediction.sigmaPrediction,
+                        urgency: pair.prediction.urgency,
+                        confidence: pair.prediction.confidence,
+                        posterior: pair.prediction.posterior
+                    ),
+                    level: DisplayLevel.make(prediction: pair.prediction,
+                                             notifyLeadHours: pair.device.notifyLeadHours),
+                    daysLeftInTrash: trashedDays[pair.device.id]
+                )
+            }
+        )
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        let data = try encoder.encode(bundle)
+
+        let stamp = Self.fileStamp.string(from: now)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CheckJuice-\(stamp).json")
+        try data.write(to: url, options: .atomic)
+        return url
+    }
+
+    /// 文件名里不能有冒号（iOS 文件系统会把它显示成别的东西）。
+    private static let fileStamp: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyyMMdd-HHmm"
+        return f
+    }()
 
     // MARK: - 落盘
 

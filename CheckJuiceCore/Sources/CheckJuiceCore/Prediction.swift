@@ -1,7 +1,10 @@
 import Foundation
 
 /// 参数后验。`logMean` / `logSigma` 是 log 尺度上的均值与标准差。
-public struct Posterior: Sendable, Equatable {
+///
+/// `Codable` 是给**开发者模式导出**用的：复现一次预测需要后验参数，
+/// 只导「还剩几小时」没法验证任何东西。
+public struct Posterior: Sendable, Equatable, Codable {
     /// 后验均值（log 尺度）。
     public var logMean: Double
     /// σ_post：对**期望寿命**的不确定度。
