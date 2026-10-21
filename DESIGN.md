@@ -686,6 +686,25 @@ CheckJuice/
 
 显示位置：设置页底部（版本 + 构建号）、开发者模式下主页顶栏（仅版本，构建号太长会挤掉图标）。
 
+#### ⚠️ 一个视图上只能挂一个 `.sheet`
+
+主页原本挂了**四个** `.sheet`（添加 / 设置 / 记更换 / 导出）。
+SwiftUI 对同一视图上的多个 sheet 修饰符**只有最后挂载的那个生效**，其余被静默吞掉。
+表现就是用户报的那个：「设置按钮点击了没反应」—— 它排在第四个 sheet 之前。
+
+修复方式是合成单一状态机：
+
+```swift
+enum Presented: Identifiable { case addDevice, settings, replace(UUID), export(URL) }
+@State private var presented: Presented?
+```
+
+好处不止是「能弹出来」，还消灭了「两个 sheet 同时为真」这类非法状态。
+**以后往主页加弹窗，加 case，别加 `.sheet`。**
+
+> 这个坑和「同一视图叠两个 `.confirmationDialog` 会抽风」是同一类问题
+> （见 2.4 回收站）。经验：SwiftUI 的 presentation 修饰符在一个视图层级上**只能有一个**。
+
 #### 导出预览的 JSON 高亮
 
 **词法规则照搬 Prism 的 `components/prism-json.js`**（业界验证过的规则集），

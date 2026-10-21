@@ -201,6 +201,8 @@ final class AppModel {
     /// 导出包。字段刻意用 `Codable` 结构体而不是手搓字典 ——
     /// 手搓的话改个字段名编译器不管，导出的 JSON 会静默少一列。
     private struct ExportBundle: Encodable {
+        var appVersion: String
+        var appBuild: String
         var exportedAt: Date
         /// 当时生效的模型参数。**必须带上**：光有数据没有参数，
         /// 复现问题时还得回忆「那时候跑的是哪套 beta / z10」。
@@ -293,6 +295,10 @@ final class AppModel {
         )
 
         let bundle = ExportBundle(
+            // 复现问题时第一要确认的就是「这份数据是哪一版导出的」——
+            // 同一个 bug 在 v0.1.1 和 v0.1.2 上表现可能完全不同。
+            appVersion: AppVersion.marketing,
+            appBuild: AppVersion.build,
             exportedAt: now,
             modelConfig: engine.config,
             displayStyle: displayStyle,

@@ -37,16 +37,33 @@ extension DisplayLevel {
 /// 统一在 `DurationText` 里，别在这儿再抄一份阈值。
 struct ContentView: View {
     @Environment(AppModel.self) private var model
-    @State private var showingAdd = false
-    @State private var showingSettings = false
 
-    /// 滑动「已换电池」后待记账的那台。**存 id 不存 `Device` 值** ——
-    /// 值快照会过期，表单却是异步弹出来的。
-    @State private var replacementTarget: ReplacementTarget?
+    /// 当前要弹的页面。
+    ///
+    /// ⚠️ **必须合成一个，不能在同一视图上挂多个 `.sheet`。**
+    /// SwiftUI 对一个视图上的多个 sheet 修饰符只有最后挂载的那个生效，
+    /// 其余的会被静默吞掉 —— 表现就是「点了按钮没反应」。
+    /// 这不是猜测：设置按钮失灵就是因为它排在第四个 `.sheet` 之前。
+    ///
+    /// 用 `enum` 而不是四组独立状态，还能顺带消灭「两个 sheet 同时为真」这类非法状态。
+    @State private var presented: Presented?
 
-    /// `.sheet(item:)` 要一个 Identifiable 包装：直接用 `UUID?` 的话，
-    /// 关闭时把 state 置 nil 会让内容在整个收起动画里先消失。
-    private struct ReplacementTarget: Identifiable { let id: UUID }
+    private enum Presented: Identifiable {
+        case addDevice
+        case settings
+        case replace(UUID)
+        case export(URL)
+
+        /// 每个 case 一个稳定的 id：`sheet(item:)` 靠它判断是不是同一个页面。
+        var id: String {
+            switch self {
+            case .addDevice: return "add"
+            case .settings: return "settings"
+            case .replace(let id): return "replace-\(id)"
+            case .export(let url): return "export-\(url.lastPathComponent)"
+            }
+        }
+    }
 
     /// 待确认删除的那台设备。
     ///
@@ -54,16 +71,6 @@ struct ContentView: View {
     /// 拆成 id + name 两个 `@State` 就会出现「清了 id 忘了清 name」的错位窗口，
     /// 而这里只可能是整台设备一起进、一起出。`Device` 本来就是 `Hashable` 的。
     @State private var pendingDelete: Device?
-
-    /// 已生成的导出文件。非 nil 就弹分享面板。
-    @State private var exportFile: ExportItem?
-
-    /// `.sheet(item:)` 要求 `Identifiable`；`URL` 本身不满足。
-    private struct ExportItem: Identifiable {
-        let id = UUID()
-        let url: URL
-        init(_ url: URL) { self.url = url }
-    }
 
     /// 排序切换。用 `Menu` + `Picker` 而不是分段控件：
     /// 四个选项横排在导航栏里放不下，而 `Picker` 在 `Menu` 里会自动打勾。
@@ -116,7 +123,7 @@ struct ContentView: View {
                     }
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
                         Button {
-                            replacementTarget = ReplacementTarget(id: item.device.id)
+                            presented = .replace(item.device.id)
                         } label: {
                             Label("已换电池", systemImage: "arrow.triangle.2.circlepath")
                         }
@@ -138,7 +145,7 @@ struct ContentView: View {
                 ToolbarItem(placement: .topBarLeading) {
                     HStack(spacing: 6) {
                         Button {
-                            showingSettings = true
+                            presented = .settings
                         } label: {
                             Label("设置", systemImage: "gearshape")
                         }
@@ -156,28 +163,36 @@ struct ContentView: View {
                 ToolbarItemGroup(placement: .primaryAction) {
                     if model.developerMode {
                         Button {
-                            exportFile = (try? model.makeExportFile()).map(ExportItem.init)
+                            if let url = try? model.makeExportFile() {
+                                presented = .export(url)
+                            }
                         } label: {
                             Label("导出", systemImage: "square.and.arrow.up")
                         }
                     }
                     sortMenu
                     Button {
-                        showingAdd = true
+                        presented = .addDevice
                     } label: {
                         Label("添加", systemImage: "plus")
                     }
                 }
             }
-            .sheet(item: $replacementTarget) { target in
-                RecordReplacementView(deviceID: target.id)
-            }
-            // 导出：先生成文件，再弹**预览**面板；分享按钮在那个面板的顶栏里。
-            //
-            // ⚠️ 原先把 `ShareLink` 直接放在面板正文里，**点了没反应**（无报错、无面板）。
-            // 已换成 `UIActivityViewController`，见 `ExportSheet` 的注释。
-            .sheet(item: $exportFile) { item in
-                ExportSheet(url: item.url)
+            // **只有一个 `.sheet`** —— 多个会互相吞，见 `Presented` 的注释。
+            .sheet(item: $presented) { page in
+                switch page {
+                case .addDevice:
+                    DeviceEditorView()
+                case .settings:
+                    SettingsView()
+                case .replace(let id):
+                    RecordReplacementView(deviceID: id)
+                case .export(let url):
+                    // 导出：先生成文件，再弹**预览**面板；分享按钮在那个面板的顶栏里。
+                    // ⚠️ 原先把 `ShareLink` 放在面板正文里，点了没反应（无报错、无面板）。
+                    // 已换成 `UIActivityViewController`，见 `ExportSheet` 的注释。
+                    ExportSheet(url: url)
+                }
             }
             .confirmationDialog(
                 "移到回收站？",
@@ -192,18 +207,6 @@ struct ContentView: View {
             } message: { device in
                 Text("「\(device.name)」会先放在回收站里，"
                      + "\(Int(Device.trashRetentionDays)) 天内可以在「设置 → 回收站」找回来，之后自动清除。")
-            }
-            .sheet(isPresented: $showingAdd) {
-                // 推入导航栈时外面已经有栈了，弹 sheet 得自己包一层。
-                NavigationStack { DeviceEditorView(editingID: nil) }
-            }
-            .sheet(isPresented: $showingSettings) {
-                SettingsView(
-                    style: model.displayStyle,
-                    showMedianSubline: model.showMedianSubline,
-                    onStyleChange: { model.setDisplayStyle($0) },
-                    onShowMedianChange: { model.setShowMedianSubline($0) }
-                )
             }
         }
     }
