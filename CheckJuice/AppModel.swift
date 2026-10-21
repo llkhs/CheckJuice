@@ -247,8 +247,31 @@ final class AppModel {
         /// 只导算好的结论没法复现任何东西。
         var device: Device
         var prediction: ExportPrediction
-        var level: DisplayLevel
+        /// 首页上那个「剩余小时数」的颜色标签 —— 也就是这台设备的提醒状态。
+        ///
+        /// 只放枚举值（`soon`）不够用：调算法时最想知道的恰恰是**为什么**它黄了
+        /// （P10 掉到 3 小时？还是提前提醒量被设成 800 小时？）。
+        /// 所以把判定依据和阈值一起带上。
+        var status: ExportStatus
         var daysLeftInTrash: Int?
+    }
+
+    /// 颜色标签的完整描述。**这是给人看的，不是给机器看的。**
+    private struct ExportStatus: Encodable {
+        /// 颜色标签本身：`exhausted` / `soon` / `normal`。
+        var level: DisplayLevel
+        /// 中文名，跟界面上一致。
+        var displayName: String
+        /// 颜色，跟界面用的同一个（`red` / `yellow` / `default`）。
+        var color: String
+        /// 判定依据的一句话说明，带上算这一判需要的具体数字。
+        var reason: String
+        /// 判定时用到的两个数：P10 剩余（判据吃的是它）与提前提醒量。
+        ///
+        /// 单独列出来，是因为「还剩多少」和「提醒阈值」在 JSON 里隔着好几层，
+        /// 想核对一次判定得来回翻 —— 摆在一起，一眼能看出 space 还有多少。
+        var p10RemainingHours: Double
+        var notifyLeadHours: Double
     }
 
     private struct ExportPrediction: Encodable {
@@ -301,8 +324,8 @@ final class AppModel {
                         confidence: pair.prediction.confidence,
                         posterior: pair.prediction.posterior
                     ),
-                    level: DisplayLevel.make(prediction: pair.prediction,
-                                             notifyLeadHours: pair.device.notifyLeadHours),
+                    status: Self.exportStatus(for: pair.prediction,
+                                              device: pair.device),
                     daysLeftInTrash: trashedDays[pair.device.id]
                 )
             }
@@ -318,6 +341,49 @@ final class AppModel {
             .appendingPathComponent("CheckJuice-\(stamp).json")
         try data.write(to: url, options: .atomic)
         return url
+    }
+
+    /// 把颜色标签展开成「能读懂为什么」的形式。
+    private static func exportStatus(for prediction: Prediction,
+                                     device: Device) -> ExportStatus {
+        let level = DisplayLevel.make(prediction: prediction,
+                                      notifyLeadHours: device.notifyLeadHours)
+        let p10 = prediction.p10RemainingHours
+        let lead = device.notifyLeadHours
+        let median = prediction.remainingHours
+
+        let color: String
+        let reason: String
+        switch level {
+        case .exhausted:
+            color = "red"
+            reason = "已过中位耗尽时刻（中位剩余 \(Self.fmt(median)) 小时 < 0）"
+        case .soon:
+            color = "yellow"
+            if p10 <= 0 {
+                reason = "已进入风险窗口（P10 剩余 \(Self.fmt(p10)) 小时 ≤ 0，"
+                    + "此时不看提前提醒量，一律算该处理）"
+            } else {
+                reason = "P10 剩余 \(Self.fmt(p10)) 小时 ≤ 提前提醒量 \(Self.fmt(lead)) 小时"
+            }
+        case .normal:
+            color = "default"
+            reason = "P10 剩余 \(Self.fmt(p10)) 小时 > 提前提醒量 \(Self.fmt(lead)) 小时"
+        }
+
+        return ExportStatus(
+            level: level,
+            displayName: level.displayName,
+            color: color,
+            reason: reason,
+            p10RemainingHours: p10,
+            notifyLeadHours: lead
+        )
+    }
+
+    /// 保留 1 位小数就够读数了 —— 导出文件是给人看的，不是给机器算的。
+    private static func fmt(_ value: Double) -> String {
+        String(format: "%.1f", value)
     }
 
     /// 文件名里不能有冒号（iOS 文件系统会把它显示成别的东西）。

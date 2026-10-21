@@ -1,4 +1,7 @@
 import SwiftUI
+// `UIActivityViewController` 在 UIKit 里。SwiftUI 的 `ShareLink` 在 sheet 里
+// 配合临时文件时不工作，只能落到 UIKit —— 见文件末尾 `ActivityView` 的注释。
+import UIKit
 import CheckJuiceCore
 
 /// 显示分级 → 颜色。放在 App 层，因为 `Color` 是 SwiftUI 的东西，
@@ -55,7 +58,7 @@ struct ContentView: View {
     /// 已生成的导出文件。非 nil 就弹分享面板。
     @State private var exportFile: ExportItem?
 
-    /// `ShareLink` 的 item 要有 identity；`URL` 本身不满足 `Identifiable`。
+    /// `.sheet(item:)` 要求 `Identifiable`；`URL` 本身不满足。
     private struct ExportItem: Identifiable {
         let id = UUID()
         let url: URL
@@ -158,8 +161,10 @@ struct ContentView: View {
             .sheet(item: $replacementTarget) { target in
                 RecordReplacementView(deviceID: target.id)
             }
-            // 导出：先生成文件再弹分享面板，而不是把 `ShareLink` 直接塞进工具栏 ——
-            // `ShareLink` 需要提前拿到真实的文件 URL，否则点开是空分享。
+            // 导出：先生成文件，再弹**预览**面板；分享按钮在那个面板的顶栏里。
+            //
+            // ⚠️ 原先把 `ShareLink` 直接放在面板正文里，**点了没反应**（无报错、无面板）。
+            // 已换成 `UIActivityViewController`，见 `ExportSheet` 的注释。
             .sheet(item: $exportFile) { item in
                 ExportSheet(url: item.url)
             }
@@ -237,49 +242,74 @@ struct DeviceRow: View {
 }
 
 
-/// 导出完成后的小面板：告诉你文件叫什么、多大，然后交给系统分享。
+/// 导出面板：预览 JSON 内容 + 顶栏分享按钮。
 ///
-/// 不让「点一下就静默生成了一个文件」——用户不知道文件在哪、叫什么，
-/// 也就没法把它发给任何人。
+/// **为什么不用 `ShareLink`**：它依赖「已经拿到可分享的 item」，
+/// 在 sheet 里配合临时文件时点下去经常毫无反应（没有错误、也没有面板）。
+/// 改用 `UIActivityViewController` 包一层 —— 拿到的是 `present` 控制权，
+/// 行为确定。这是一处刻意违反「优先用 SwiftUI 原生」的例子：
+/// 原生控件在这里不工作，就得换。
 private struct ExportSheet: View {
     @Environment(\.dismiss) private var dismiss
     let url: URL
 
+    @State private var content: String = ""
+    @State private var shareSheet: ActivityItem?
+
+    /// `UIActivityViewController` 的 item 需要 identity。
+    private struct ActivityItem: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 14) {
-                Image(systemName: "doc.text")
-                    .font(.system(size: 40))
-                    .foregroundStyle(.secondary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text(url.lastPathComponent)
+                            .font(.subheadline)
+                            .monospaced()
+                        Spacer()
+                        Text(sizeText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 16)
 
-                Text(url.lastPathComponent)
-                    .font(.headline)
-                    .monospaced()
-
-                Text(sizeText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                ShareLink(item: url) {
-                    Label("分享 / 存到「文件」", systemImage: "square.and.arrow.up")
-                        .frame(maxWidth: .infinity)
+                    // 预览原文。调算法时最想确定的就是「导出的到底是哪些字段」，
+                    // 让它直接可见，比再点一次分享、再打开文件强得多。
+                    Text(content)
+                        .font(.system(.caption2, design: .monospaced))
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(Color.secondary.opacity(0.08),
+                                    in: RoundedRectangle(cornerRadius: 8))
+                        .padding(.horizontal, 16)
                 }
-                .buttonStyle(.borderedProminent)
-                .padding(.top, 6)
-
-                Text("包含每台设备的原始更换时刻、当前预测、后验参数和模型配置 —— "
-                     + "拿这份 JSON 就能复现一次完整的计算。")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+                .padding(.vertical, 12)
             }
-            .padding(24)
-            .navigationTitle("导出完成")
+            .navigationTitle("导出预览")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .cancellationAction) {
                     Button("完成") { dismiss() }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        shareSheet = ActivityItem(url: url)
+                    } label: {
+                        Label("分享", systemImage: "square.and.arrow.up")
+                    }
+                }
+            }
+            .task {
+                // 文件不大（几十台设备也就几十 KB），一次读全，不做分页。
+                content = (try? String(contentsOf: url, encoding: .utf8)) ?? "（读取失败）"
+            }
+            .sheet(item: $shareSheet) { item in
+                ActivityView(url: item.url)
             }
         }
     }
@@ -289,4 +319,18 @@ private struct ExportSheet: View {
         let bytes = (attrs?[.size] as? NSNumber)?.intValue ?? 0
         return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
+}
+
+/// `UIActivityViewController` 的 SwiftUI 包装。
+///
+/// iPad 上 `popoverPresentationController` 不设 anchor 会崩机 —— 这里给出
+/// 屏幕中部的 popover 配置，`TARGETED_DEVICE_FAMILY` 含 iPad，必须处理。
+private struct ActivityView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [url], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
