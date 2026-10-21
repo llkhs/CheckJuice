@@ -47,12 +47,6 @@ enum JSONHighlighter {
     /// 等宽字体。所有区间都设同一个实例，省得逐段重复构造。
     private static let font = UIFont.monospacedSystemFont(ofSize: 11, weight: .regular)
 
-    /// 超过这个大小就不着色了，只显示纯文本。
-    ///
-    /// 着色本身已经是线性扫描 + 区间属性，512 KB 也不会卡；
-    /// 留这个上限是防极端情况（几千台设备的导出），不是给慢实现兜底。
-    private static let sizeLimit = 512 * 1024
-
     /// 着色。**可以在任何线程调用**（不碰 SwiftUI 状态）。
     static func attributed(_ source: String) -> AttributedString {
         let result = NSMutableAttributedString(string: source)

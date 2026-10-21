@@ -91,124 +91,153 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if let storageError = model.storageError {
-                    Section {
-                        Label {
-                            Text(storageError)
-                                .font(.footnote)
-                        } icon: {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                        }
-                        .foregroundStyle(.red)
-                    }
+            listContent
+                .overlay { emptyOverlay }
+                .navigationTitle("Check Juice")
+                .toolbar { toolbarContent }
+                .sheet(item: $presented) { page in
+                    sheetContent(page)
                 }
+                .confirmationDialog(
+                    "移到回收站？",
+                    isPresented: Binding(
+                        get: { pendingDelete != nil },
+                        set: { if !$0 { pendingDelete = nil } }
+                    ),
+                    titleVisibility: .visible,
+                    presenting: pendingDelete
+                ) { device in
+                    Button("移到回收站", role: .destructive) { model.delete(id: device.id) }
+                } message: { device in
+                    Text(trashMessage(for: device))
+                }
+        }
+    }
 
-                ForEach(model.ranked) { item in
-                    NavigationLink {
-                        DeviceEditorView(editingID: item.device.id)
-                    } label: {
-                        DeviceRow(
-                            item: item,
-                            style: model.displayStyle,
-                            showMedian: model.showMedianSubline
-                        )
+    /// 主体列表。
+    ///
+    /// **拆出来不是洁癖**：`body` 原先有 121 行，CI 直接报
+    /// `the compiler is unable to type-check this expression in reasonable time`。
+    /// SwiftUI 的 ViewBuilder 会把整棵树展开成一次巨型类型推断，
+    /// 视图一多就超时。拆成几个小的计算属性，每块各自推断，问题就没了。
+    /// `body` 里每加一个修饰符都在给那棵树加压，别嫌麻烦。
+    private var listContent: some View {
+        List {
+            if let storageError = model.storageError {
+                Section {
+                    Label {
+                        Text(storageError).font(.footnote)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
                     }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            pendingDelete = item.device
-                        } label: {
-                            Label("删除", systemImage: "trash")
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                        Button {
-                            presented = .replace(item.device.id)
-                        } label: {
-                            Label("已换电池", systemImage: "arrow.triangle.2.circlepath")
-                        }
-                        .tint(.blue)
-                    }
+                    .foregroundStyle(.red)
                 }
             }
-            .overlay {
-                if model.ranked.isEmpty {
-                    ContentUnavailableView(
-                        "还没有物品",
-                        systemImage: "battery.100",
-                        description: Text("点右上角 + 添加第一个要盯电池的东西")
-                    )
-                }
-            }
-            .navigationTitle("Check Juice")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    HStack(spacing: 6) {
-                        Button {
-                            presented = .settings
-                        } label: {
-                            Label("设置", systemImage: "gearshape")
-                        }
-                        // 只在开发者模式下显示版本号：普通用户不需要看见它，
-                        // 而调算法时要一眼确认装的是哪一版。
-                        // 构建号不在这儿放 —— 顶栏空间有限，塞多了会挤掉后面的图标。
-                        if model.developerMode {
-                            Text(AppVersion.short)
-                                .font(.caption2)
-                                .monospacedDigit()
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                ToolbarItemGroup(placement: .primaryAction) {
-                    if model.developerMode {
-                        Button {
-                            if let url = try? model.makeExportFile() {
-                                presented = .export(url)
-                            }
-                        } label: {
-                            Label("导出", systemImage: "square.and.arrow.up")
-                        }
-                    }
-                    sortMenu
-                    Button {
-                        presented = .addDevice
-                    } label: {
-                        Label("添加", systemImage: "plus")
-                    }
-                }
-            }
-            // **只有一个 `.sheet`** —— 多个会互相吞，见 `Presented` 的注释。
-            .sheet(item: $presented) { page in
-                switch page {
-                case .addDevice:
-                    DeviceEditorView()
-                case .settings:
-                    SettingsView()
-                case .replace(let id):
-                    RecordReplacementView(deviceID: id)
-                case .export(let url):
-                    // 导出：先生成文件，再弹**预览**面板；分享按钮在那个面板的顶栏里。
-                    // ⚠️ 原先把 `ShareLink` 放在面板正文里，点了没反应（无报错、无面板）。
-                    // 已换成 `UIActivityViewController`，见 `ExportSheet` 的注释。
-                    ExportSheet(url: url)
-                }
-            }
-            .confirmationDialog(
-                "移到回收站？",
-                isPresented: Binding(
-                    get: { pendingDelete != nil },
-                    set: { if !$0 { pendingDelete = nil } }
-                ),
-                titleVisibility: .visible,
-                presenting: pendingDelete
-            ) { device in
-                Button("移到回收站", role: .destructive) { model.delete(id: device.id) }
-            } message: { device in
-                Text("「\(device.name)」会先放在回收站里，"
-                     + "\(Int(Device.trashRetentionDays)) 天内可以在「设置 → 回收站」找回来，之后自动清除。")
+            ForEach(model.ranked) { item in
+                deviceRow(item)
             }
         }
+    }
+
+    @ViewBuilder
+    private func deviceRow(_ item: RankedDevice) -> some View {
+        NavigationLink {
+            DeviceEditorView(editingID: item.device.id)
+        } label: {
+            DeviceRow(
+                item: item,
+                style: model.displayStyle,
+                showMedian: model.showMedianSubline
+            )
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                pendingDelete = item.device
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                presented = .replace(item.device.id)
+            } label: {
+                Label("已换电池", systemImage: "arrow.triangle.2.circlepath")
+            }
+            .tint(.blue)
+        }
+    }
+
+    @ViewBuilder
+    private var emptyOverlay: some View {
+        if model.ranked.isEmpty {
+            ContentUnavailableView(
+                "还没有物品",
+                systemImage: "battery.100",
+                description: Text("点右上角 + 添加第一个要盯电池的东西")
+            )
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            HStack(spacing: 6) {
+                Button {
+                    presented = .settings
+                } label: {
+                    Label("设置", systemImage: "gearshape")
+                }
+                // 只在开发者模式下显示版本号：普通用户不需要看见它，
+                // 而调算法时要一眼确认装的是哪一版。
+                // 构建号不在这儿放 —— 顶栏空间有限，塞多了会挤掉后面的图标。
+                if model.developerMode {
+                    Text(AppVersion.short)
+                        .font(.caption2)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            if model.developerMode {
+                Button {
+                    if let url = try? model.makeExportFile() {
+                        presented = .export(url)
+                    }
+                } label: {
+                    Label("导出", systemImage: "square.and.arrow.up")
+                }
+            }
+            sortMenu
+            Button {
+                presented = .addDevice
+            } label: {
+                Label("添加", systemImage: "plus")
+            }
+        }
+    }
+
+    /// 待弹页面的内容。**只有这一个 `.sheet`** —— 多个会互相吞，见 `Presented` 的注释。
+    @ViewBuilder
+    private func sheetContent(_ page: Presented) -> some View {
+        switch page {
+        case .addDevice:
+            DeviceEditorView()
+        case .settings:
+            SettingsView()
+        case .replace(let id):
+            RecordReplacementView(deviceID: id)
+        case .export(let url):
+            // 导出：先生成文件，再弹**预览**面板；分享按钮在那个面板的顶栏里。
+            // 原先把 `ShareLink` 放在面板正文里，点了没反应（无报错、无面板）。
+            // 已换成 `UIActivityViewController`，见 `ExportSheet` 的注释。
+            ExportSheet(url: url)
+        }
+    }
+
+    private func trashMessage(for device: Device) -> String {
+        "「\(device.name)」会先放在回收站里，"
+            + "\(Int(Device.trashRetentionDays)) 天内可以在「设置 → 回收站」找回来，之后自动清除。"
     }
 }
 
