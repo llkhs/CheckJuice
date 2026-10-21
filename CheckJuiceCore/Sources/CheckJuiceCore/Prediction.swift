@@ -259,6 +259,27 @@ public extension Prediction {
         return exhausted ? "刚刚耗尽" : "不足 1 分钟"
     }
 
+    /// 剩余时长小于这个值（30 分钟）时，列表改用「状态词 / 具体时长」交替显示。
+    ///
+    /// 为什么是 30 分钟：再往上（1 小时）文字本身已经够短，不需要压缩；
+    /// 再往下（10 分钟）留给用户反应的时间就不够了，光看交替反而更急。
+    public static let alternatingThresholdHours: Double = 0.5
+
+    /// 这一条要不要在列表里交替显示。
+    ///
+    /// 判定吃的是 **P10 剩余** —— 跟列表上那个数字同源，
+    /// 不然会出现「文字说还剩 40 分钟、却在交替显示」这种自相矛盾。
+    /// 只在「剩余时长」样式下有意义：`moment` 样式显示的是时刻，没有可压缩的文字。
+    public var needsAlternatingDisplay: Bool {
+        abs(p10RemainingHours) < Self.alternatingThresholdHours
+    }
+
+    /// 交替显示时的**短状态词**。
+    ///
+    /// ⚠️ 已耗尽和「快耗尽」共用同一个词，这是产品上的妥协：
+    /// 还剩 12 分钟时显示「耗尽中」严格说是错的。要改成「即将耗尽」只需改这一行。
+    public static let alternatingStatusWord = "耗尽中"
+
     /// 风险窗口起点（P10）的文本 —— 「最早可能耗尽」。
     ///
     /// 这是本模型真正的卖点：中位数只代表 50% 的概率，只盯着它换电池必然翻车。

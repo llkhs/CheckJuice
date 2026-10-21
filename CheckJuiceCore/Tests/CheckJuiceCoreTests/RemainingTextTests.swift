@@ -119,3 +119,48 @@ final class DurationTextTests: XCTestCase {
         XCTAssertEqual(t(.nan), "—")
     }
 }
+
+/// 交替显示（「耗尽中」↔「还剩 X 分钟」）的触发条件。
+///
+/// 判据是 **P10 剩余**的绝对值 < 30 分钟 —— 跟列表上那个数字同源，
+/// 否则会出现「文字说还剩 40 分钟、却在交替显示」这种自相矛盾。
+final class AlternatingDisplayTests: XCTestCase {
+
+    private func prediction(p10RemainingHours: Double) -> Prediction {
+        Prediction(
+            medianHours: 10, p10Hours: 5,
+            p50ExhaustAt: Date(), p10ExhaustAt: Date(),
+            remainingHours: p10RemainingHours, p10RemainingHours: p10RemainingHours,
+            ageHours: 0, ratio: 0,
+            sigmaPrediction: 0.3,
+            urgency: .normal, confidence: .low,
+            posterior: Posterior(logMean: 0, logSigma: 0.3,
+                                 effectiveSampleSize: 0, observedCount: 0,
+                                 withinDeviceSigma: 0.3)
+        )
+    }
+
+    func testBelow30MinutesTriggers() {
+        XCTAssertTrue(prediction(p10RemainingHours: 0.49).needsAlternatingDisplay)
+        XCTAssertTrue(prediction(p10RemainingHours: 0.1).needsAlternatingDisplay)
+    }
+
+    func testAbove30MinutesDoesNotTrigger() {
+        XCTAssertFalse(prediction(p10RemainingHours: 0.51).needsAlternatingDisplay)
+        XCTAssertFalse(prediction(p10RemainingHours: 5).needsAlternatingDisplay)
+    }
+
+    /// 已耗尽也要交替：那种情况本来就该说「耗尽中」。
+    func testAlreadyExhaustedAlsoTriggers() {
+        XCTAssertTrue(prediction(p10RemainingHours: -0.2).needsAlternatingDisplay)
+        XCTAssertTrue(prediction(p10RemainingHours: -0.49).needsAlternatingDisplay)
+        XCTAssertFalse(prediction(p10RemainingHours: -2).needsAlternatingDisplay)
+    }
+
+    /// 边界：正好 30 分钟不触发（用 `<` 而不是 `<=`），
+    /// 否则「还剩 30 分钟」这种正常文案也会被压成「耗尽中」。
+    func testBoundaryIsExclusive() {
+        XCTAssertFalse(prediction(p10RemainingHours: 0.5).needsAlternatingDisplay)
+        XCTAssertFalse(prediction(p10RemainingHours: -0.5).needsAlternatingDisplay)
+    }
+}

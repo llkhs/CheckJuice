@@ -222,13 +222,29 @@ struct DeviceRow: View {
             Spacer(minLength: 8)
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(item.prediction.remainingText(style: style))
+                // 剩余不足 30 分钟时，在「耗尽中」和具体时长之间每 2 秒交叉淡入淡出。
+                //
+                // 目的是**省横向空间**：短命电池的文案会从「还剩 22 分钟」这种
+                // 六七个字压成两个字，让同一行能装下更多信息。
+                // 代价是两段文字要交替出现，看的人需要多扫一眼。
+                if style == .remaining, item.prediction.needsAlternatingDisplay {
+                    AlternatingText(
+                        compact: Prediction.alternatingStatusWord,
+                        detail: item.prediction.remainingText(style: style)
+                    )
                     .font(.title3)
                     .monospacedDigit()
                     .fontWeight(.semibold)
-                    // 主数字的颜色 = 「还剩多久」这个信息本身的紧急程度。
-                    // 红色：已经过了中位耗尽时刻；黄色：离风险窗口不足提前提醒量。
                     .foregroundStyle(item.level.textColor)
+                } else {
+                    Text(item.prediction.remainingText(style: style))
+                        .font(.title3)
+                        .monospacedDigit()
+                        .fontWeight(.semibold)
+                        // 主数字的颜色 = 「还剩多久」这个信息本身的紧急程度。
+                        // 红色：已经过了中位耗尽时刻；黄色：离风险窗口不足提前提醒量。
+                        .foregroundStyle(item.level.textColor)
+                }
                 if showMedian {
                     Text(item.prediction.medianText(style: style))
                         .font(.caption)
@@ -333,4 +349,52 @@ private struct ActivityView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+
+
+/// 两段文字交替显示，交叉淡入淡出。
+///
+/// **两段叠在同一个 `ZStack` 里**，而不是 `if/else` 切换：
+/// `if/else` 会让整行宽度在「耗尽中」（3 字）和「还剩 22 分钟」（6 字）之间来回跳，
+/// 每 2 秒抖一次，比不交替还难看。叠放后宽度取两者的最大值，保持稳定。
+private struct AlternatingText: View {
+    let compact: String
+    let detail: String
+
+    @State private var showingDetail = false
+
+    /// 2 秒一轮，用共享时钟（见 `AlternatingClock`）。
+    ///
+    /// 之前写成 `private let ticker = Timer.publish(...)`（每行一个）有两个毛病：
+    /// 1. 视图每次重渲染都会新建 publisher，计时被重置 —— 重渲染比 2 秒频繁时它永远不触发；
+    /// 2. 多行各自计时，翻转时刻对不齐，屏幕上会看到随机乱闪。
+    private let ticker = AlternatingClock.ticker
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            Text(compact)
+                .opacity(showingDetail ? 0 : 1)
+            Text(detail)
+                .opacity(showingDetail ? 1 : 0)
+        }
+        .animation(.easeInOut(duration: 0.5), value: showingDetail)
+        .onReceive(ticker) { _ in
+            showingDetail.toggle()
+        }
+        // 读屏时别把两段都念一遍：只念具体时长，那是用户真正需要的信息。
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(detail)
+    }
+}
+
+
+/// 全局共享的 2 秒心跳。
+///
+/// `static let` 只创建一次，所有交替显示的行订阅同一个 publisher ——
+/// 翻转时刻天然对齐，也不会因为重渲染把计时重置。
+///
+/// 为什么不用 `TimelineView(.periodic)`：它按时间轴重绘，能算出「该显示第几张」，
+/// 但管不了「两个文本交叉淡入」这个动画状态。这个需求本质上要一个定时器。
+private enum AlternatingClock {
+    static let ticker = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 }
