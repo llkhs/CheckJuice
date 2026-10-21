@@ -181,22 +181,27 @@ struct ContentView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
-            HStack(spacing: 6) {
-                Button {
-                    presented = .settings
-                } label: {
-                    Label("设置", systemImage: "gearshape")
-                }
-                // 只在开发者模式下显示版本号：普通用户不需要看见它，
-                // 而调算法时要一眼确认装的是哪一版。
-                // 构建号不在这儿放 —— 顶栏空间有限，塞多了会挤掉后面的图标。
-                if model.developerMode {
-                    Text(AppVersion.short)
-                        .font(.caption2)
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                }
+        // ⚠️ 用 `ToolbarItemGroup`，**不要**在一个 `ToolbarItem` 里套
+        // `HStack { Button; Text }`。
+        //
+        // 真机故障：首次安装（开发者模式关）时设置按钮正常；打开开发者模式后
+        // 版本号 `Text` 进来，设置按钮就点不动了 —— `HStack` 在工具栏里的
+        // 点击区域分配不可靠，多一个子视图就把 Button 的 hit area 抢掉。
+        // `ToolbarItemGroup` 里每个元素是独立 item，各自有独立点击区。
+        ToolbarItemGroup(placement: .topBarLeading) {
+            Button {
+                presented = .settings
+            } label: {
+                Label("设置", systemImage: "gearshape")
+            }
+            // 只在开发者模式下显示版本号：普通用户不需要看见它，
+            // 而调算法时要一眼确认装的是哪一版。
+            // 构建号不在这儿放 —— 顶栏空间有限，塞多了会挤掉后面的图标。
+            if model.developerMode {
+                Text(AppVersion.short)
+                    .font(.caption2)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {
@@ -451,17 +456,25 @@ private struct AlternatingText: View {
             Text(detail)
                 .opacity(showingDetail ? 1 : 0)
         }
-        // 1.0 秒渐变更从容；原来 0.5 秒在 3 秒周期里显得像闪一下。
-        .animation(.easeInOut(duration: 1.0), value: showingDetail)
+        // ⚠️ **不要**在这里挂 `.animation(...)`：那会让「点按」和「自动翻转」
+        // 共用同一条时长。真机反馈是「点一下要等一秒才切过去」，手感像卡了。
+        //
+        // 改成各自用 `withAnimation`：
+        // * 点按 → 0.15 秒，立刻响应（这是用户的直接操作，不该让他等）
+        // * 自动 → 1.0 秒，从容的淡入淡出
         .onReceive(ticker) { _ in
             guard Date() >= holdUntil else { return }
-            showingDetail.toggle()
+            withAnimation(.easeInOut(duration: 1.0)) {
+                showingDetail.toggle()
+            }
         }
         .contentShape(Rectangle())
         .onTapGesture {
             // 点一下立刻切，并从这里重新计一个完整周期。
-            showingDetail.toggle()
             holdUntil = Date().addingTimeInterval(Self.period)
+            withAnimation(.easeInOut(duration: 0.15)) {
+                showingDetail.toggle()
+            }
         }
         // 读屏：内容只念具体时长（用户真正需要的信息），并说明可以点按切换。
         .accessibilityElement(children: .ignore)
