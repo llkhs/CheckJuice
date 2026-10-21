@@ -107,25 +107,6 @@ public struct Device: Codable, Identifiable, Hashable, Sendable {
     ///
     /// **为什么要这么干**：界面只能表达「年月日时分」——`DatePicker` 的
     /// `displayedComponents: [.date, .hourAndMinute]` 没有秒这一位。
-    /// 但早期默认值用的是 `Date()`，带小数秒，于是「看到的 14:21」和
-    /// 「实际存的 14:21:48.373」不是一回事。用户根本没机会选那几十秒。
-    ///
-    /// 对齐之后**看到的 = 存的 = 算的**。量化误差对 4 小时电池约 0.4%，
-    /// 远小于模型本身的不确定性（σ_pred 封顶 0.70 ≈ ±100%）。
-    ///
-    /// 这是**幂等**的：已经对齐的值再跑一遍不会变，所以可以在读路径上每次都跑。
-    public var normalizedToMinute: Device {
-        var copy = self
-        copy.events = events.map { event in
-            var e = event
-            e.at = LifetimeModel.floorToMinute(event.at)
-            return e
-        }
-        // `deletedAt` 是系统时间戳，不对齐 —— 它不参与预测，
-        // 而且是「被删那一刻」的审计记录，没有理由改。
-        return copy
-    }
-
     /// 在回收站里已经躺够 `trashRetentionDays` 了吗。
     ///
     /// 判定放 Core 不放 App 层：这是个纯粹的、有边界的时间比较，

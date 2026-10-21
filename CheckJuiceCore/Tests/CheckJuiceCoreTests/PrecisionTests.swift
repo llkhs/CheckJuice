@@ -3,93 +3,33 @@ import Foundation
 @testable import CheckJuiceCore
 import CheckJuiceStore
 
-/// 时刻精度测试。
+/// 时刻精度。
 ///
-/// **起因是一次真机数据反查**：5 台测试设备里，用时间选择器填的那台能和
-/// Python 参考实现逐位对上，其余 4 台（默认「此刻」）差 1e-4 小时。
-/// 根因是 UI 只显示到分钟，而存进去的值带小数秒 ——
-/// **用户看到 14:21，库里是 14:21:48.373**，他根本没机会选那几十秒。
+/// 这里记录一段**走弯路的结论**，免得以后又被同一个想法带偏：
 ///
-/// 所以：界面能表达的精度，就是数据该有的精度。
+/// 1. 起初发现「界面显示 14:21，库里是 14:21:48.373」，用户没机会选那几十秒，
+///    于是我把**所有**写入时刻都截断到分钟（`floorToMinute`），
+///    还在读路径上做了一次迁移。
+/// 2. 真机反馈四台设备挤成同一个时刻、列表乱序 —— 因为它们是同一分钟内建的，
+///    截断后时间戳完全相同。
+/// 3. 更根本的问题：截断让数据**更不准**。`Date()` 记的是「按下按钮的那一刻」，
+///    那是真实的；把它挪回 `:00` 等于凭空丢掉最多 59 秒的真实信息。
+///
+/// 正确认识：
+/// * 用户**手动挑选**的时刻 —— `DatePicker` 只有 `.date` + `.hourAndMinute`，
+///   SwiftUI 自己就把秒归零了，不需要我们动手。
+/// * 用户**没动**、默认「此刻」—— 就该保留真实精度。排序也依赖它区分先后。
+/// * 秒级精度对**模型**确实没意义（下面有量化对比），但「对模型没意义」
+///    不等于「应该删掉」——它对**排序**有意义。
 final class PrecisionTests: XCTestCase {
 
-    // MARK: - 对齐本身
+    // MARK: - 秒级误差对预测的影响
 
-    func testFloorToMinuteDropsSeconds() {
-        // 用整分钟做基准，避免时区/夏令时的干扰。
-        let exact = Date(timeIntervalSince1970: 1_700_000_040)   // 整分钟
-        XCTAssertEqual(LifetimeModel.floorToMinute(exact), exact)
-
-        let withSeconds = exact.addingTimeInterval(48.373)
-        XCTAssertEqual(LifetimeModel.floorToMinute(withSeconds), exact,
-                       "14:xx:48.373 应对齐到 14:xx:00")
-    }
-
-    func testFloorToMinuteIsIdempotent() {
-        let messy = Date(timeIntervalSince1970: 1_700_000_099.999)
-        let once = LifetimeModel.floorToMinute(messy)
-        let twice = LifetimeModel.floorToMinute(once)
-        XCTAssertEqual(once, twice, "幂等 —— 读路径每次都跑也不会漂")
-    }
-
-    /// 向下取整而不是四舍五入：59 秒应回到本分钟的开头，不是下一秒。
-    func testFloorToMinuteRoundsDownNotNearest() {
-        let exact = Date(timeIntervalSince1970: 1_700_000_040)
-        let almostNext = exact.addingTimeInterval(59)
-        XCTAssertEqual(LifetimeModel.floorToMinute(almostNext), exact)
-    }
-
-    // MARK: - 迁移
-
-    func testNormalizeAlignsEveryEvent() {
-        let base = Date(timeIntervalSince1970: 1_700_000_040)
-        var device = Device(
-            name: "测试",
-            nominalLifeHours: 4,
-            events: [
-                ReplacementEvent(at: base.addingTimeInterval(48.373), kind: .initial),
-                ReplacementEvent(at: base.addingTimeInterval(3600 + 12.7), kind: .exhausted),
-            ]
-        )
-        // deletedAt 是审计记录，不该被改。
-        device.deletedAt = base.addingTimeInterval(7.5)
-
-        let normalized = device.normalizedToMinute
-        XCTAssertEqual(normalized.events[0].at, base)
-        XCTAssertEqual(normalized.events[1].at, base.addingTimeInterval(3600))
-        XCTAssertEqual(normalized.deletedAt, device.deletedAt,
-                       "删除时刻不参与预测，保持原样")
-        XCTAssertEqual(normalized.id, device.id)
-        XCTAssertEqual(normalized.name, device.name)
-    }
-
-    func testNormalizePreservesKindAndNote() {
-        let base = Date(timeIntervalSince1970: 1_700_000_040)
-        let device = Device(name: "x", nominalLifeHours: 4, events: [
-            ReplacementEvent(at: base.addingTimeInterval(3.5), kind: .initial, note: "备注"),
-            ReplacementEvent(at: base.addingTimeInterval(4000.9), kind: .faulty, note: "漏液"),
-        ])
-        let n = device.normalizedToMinute
-        XCTAssertEqual(n.events.map { $0.kind }, [.initial, .faulty])
-        XCTAssertEqual(n.events.map { $0.note }, ["备注", "漏液"])
-    }
-
-    /// 已经在分钟上的数据跑一遍必须**完全不变** —— 否则读一次写一次，
-    /// 数据会慢慢漂（那是最难查的一类 bug）。
-    func testNormalizeDoesNotChangeAlignedData() {
-        let base = Date(timeIntervalSince1970: 1_700_000_040)
-        let device = Device(name: "x", nominalLifeHours: 4, events: [
-            ReplacementEvent(at: base, kind: .initial),
-            ReplacementEvent(at: base.addingTimeInterval(7200), kind: .exhausted),
-        ])
-        XCTAssertEqual(device.normalizedToMinute, device)
-    }
-
-    // MARK: - 秒级差异到底影响多大（回答「要不要量化成整数小时」）
-
-    /// 秒级截断对预测的影响**远小于**任何真实不确定性 —— 所以不该为此把
-    /// 模型改成整数小时（那会引入 12.5%~25% 的量化误差，见下一条）。
-    func testSecondLevelTruncationBarelyAffectsPrediction() {
+    /// 59 秒的输入偏差，对寿命估计的影响应远小于 1%。
+    ///
+    /// 这条是「别为了消除秒而折腾模型」的依据：模型本身的不确定性（σ_pred
+    /// 封顶 0.70）比这大三个数量级，盯着秒做优化是在噪声上绣花。
+    func testSecondLevelOffsetBarelyAffectsPrediction() {
         let model = LifetimeModel()
         let base = Date(timeIntervalSince1970: 1_700_000_040)
         let now = base.addingTimeInterval(5 * 3600)
@@ -104,14 +44,13 @@ final class PrecisionTests: XCTestCase {
         let clean = try! XCTUnwrap(model.predict(make(0), now: now))
         let messy = try! XCTUnwrap(model.predict(make(59), now: now))
 
-        // 中位寿命的相对差应小于 1%（实测约 0.3%）。
         let relDiff = abs(messy.medianHours - clean.medianHours) / clean.medianHours
         XCTAssertLessThan(relDiff, 0.01,
                           "59 秒的输入偏差对寿命估计影响应远小于 1%")
     }
 
-    /// 反过来说：整数小时 / 0.5 小时步进的量化误差比「保留秒」大得多。
-    /// 这条不测代码，测的是**设计判断**，防止以后有人真的把模型改成量化。
+    /// 反过来：整数小时 / 0.5 小时步进的量化误差比「保留秒」大得多。
+    /// 这条不测代码，测的是**设计判断** —— 防止以后有人真的把模型改成量化。
     func testHalfHourQuantizationWouldBeMuchWorseThanSeconds() {
         let nominalHours = 4.0
         let secondQuantization = (1.0 / 3600) / nominalHours     // 1 秒
@@ -119,5 +58,26 @@ final class PrecisionTests: XCTestCase {
 
         XCTAssertGreaterThan(halfHourQuantization, secondQuantization * 100,
                              "0.5 小时步进的误差是秒级的 100 倍以上 —— 量化不是简化，是变糟")
+    }
+
+    // MARK: - 排序需要亚分钟精度
+
+    /// **同一分钟内**创建的多台设备，必须能靠时刻区分先后。
+    ///
+    /// 这是上一版截断方案炸掉的场景：四台都变成 10:46:00，
+    /// 排序键完全相同，而 Swift 的 `sorted` 不稳定 → 列表顺序乱跳。
+    func testSubMinuteTimestampsKeepCreationOrderDistinguishable() {
+        let base = Date(timeIntervalSince1970: 1_700_000_040)   // 某个整分钟
+        let a = base.addingTimeInterval(3)
+        let b = base.addingTimeInterval(21)
+        let c = base.addingTimeInterval(47)
+
+        XCTAssertNotEqual(a, b)
+        XCTAssertNotEqual(b, c)
+        XCTAssertLessThan(a, b)
+        XCTAssertLessThan(b, c)
+        // 三者在同一分钟内（这正是不该被压成同一个值的原因）
+        XCTAssertEqual(Int(b.timeIntervalSince1970 / 60),
+                       Int(c.timeIntervalSince1970 / 60))
     }
 }

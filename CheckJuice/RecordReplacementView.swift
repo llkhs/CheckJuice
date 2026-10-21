@@ -14,7 +14,7 @@ struct RecordReplacementView: View {
 
     // 默认「此刻」但要按分钟对齐：界面只显示到分钟，存的值也必须到分钟，
     // 否则用户看到 14:21、库里是 14:21:48.373 —— 他根本没机会选那几十秒。
-    @State private var at = LifetimeModel.floorToMinute(Date())
+    @State private var at = Date()
     @State private var kind: EventKind = .exhausted
 
     private var device: Device? { appModel.device(withID: deviceID) }

@@ -72,9 +72,19 @@ struct DeviceEditorView: View {
     /// 界面上只显示到分钟（`DatePicker(displayedComponents:)` 没有秒这一位），
     /// 所以存进数据的也必须到分钟 —— 否则用户看到 14:21、库里是 14:21:48，
     /// 两者差了一截，而他根本没机会选那 48 秒。
-    private static var nowToMinute: Date {
-        LifetimeModel.floorToMinute(Date())
-    }
+    /// 「此刻」。
+    ///
+    /// ⚠️ **不要截断到分钟**。曾经这里返回 `floorToMinute(Date())`，理由是
+    /// 「界面上只显示到分钟，数据也不该有秒」。那是错的：
+    ///
+    /// * 用户没动选择器时，真实时刻（如 10:46:37）才**准确** —— 它就是按下按钮的那一刻。
+    ///   截成 10:46:00 等于把事件往回挪了 37 秒，数据反而变不准。
+    /// * 同一分钟内创建多台会得到**完全相同**的时间戳，排序无从区分
+    ///   （真机事故：四台都变成 10:46:00，列表顺序乱跳）。
+    ///
+    /// 「界面精度即数据精度」只适用于用户**手动挑选**的时刻；
+    /// 默认「此刻」就该保留真实精度。
+    private static var now: Date { Date() }
 
     /// 按时间升序。列表就按这个顺序显示 —— 用户把某条改到更早的日期，
     /// 它会当场挪上去，「起始」标记也跟着换行，所见即所得。
@@ -219,7 +229,7 @@ struct DeviceEditorView: View {
             .onDelete(perform: deleteRows)
 
             Button {
-                rows.append(EventDraft(at: Self.nowToMinute, kind: .exhausted))
+                rows.append(EventDraft(at: Self.now, kind: .exhausted))
             } label: {
                 Label("加一条记录", systemImage: "plus.circle")
             }
@@ -484,7 +494,7 @@ struct DeviceEditorView: View {
     /// 所以要靠 id 才对得上号。
     private func binding(for id: UUID) -> Binding<EventDraft> {
         Binding(
-            get: { rows.first { $0.id == id } ?? EventDraft(at: Self.nowToMinute, kind: .exhausted) },
+            get: { rows.first { $0.id == id } ?? EventDraft(at: Self.now, kind: .exhausted) },
             set: { newValue in
                 guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
                 rows[index] = newValue
@@ -507,7 +517,7 @@ struct DeviceEditorView: View {
         guard !loaded else { return }
         loaded = true
         guard let id = editingID, let device = appModel.device(withID: id) else {
-            rows = [EventDraft(at: Self.nowToMinute, kind: .initial)]
+            rows = [EventDraft(at: Self.now, kind: .initial)]
             // 新增：进页面就准备接收输入。
             // 稍等一下再置焦点 —— 刚 onAppear 时输入框还没进视图层级，直接设会失效。
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { nameFocused = true }
@@ -534,12 +544,12 @@ struct DeviceEditorView: View {
         let rounded = device.notifyLeadHours.rounded()
         notifyLeadAmount = (device.notifyLeadHours > 0 && rounded == 0) ? 1 : rounded
         rows = device.sortedEvents.map { EventDraft(at: $0.at, kind: $0.kind) }
-        if rows.isEmpty { rows = [EventDraft(at: Self.nowToMinute, kind: .initial)] }
+        if rows.isEmpty { rows = [EventDraft(at: Self.now, kind: .initial)] }
     }
 
     private func draftDevice(name draftName: String) -> Device {
         var ordered = orderedRows
-        if ordered.isEmpty { ordered = [EventDraft(at: Self.nowToMinute, kind: .initial)] }
+        if ordered.isEmpty { ordered = [EventDraft(at: Self.now, kind: .initial)] }
         // 最旧那条只标记时间线的起点：在它之前这颗电池何时装上，我们不知道，
         // 所以强制 `.initial` —— 它后面那段间隔不能当寿命样本。
         ordered[0].kind = .initial

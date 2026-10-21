@@ -85,13 +85,6 @@ public struct LifetimeModel {
     /// 量化误差对 4 小时电池约 0.4%，远小于任何真实不确定性。
     ///
     /// 用**向下**截断而不是四舍五入：跟 `floorToHour` 同一口径，
-    /// 而且「14:21:48 记成 14:21」比「记成 14:22」更不容易让人以为自己填错了。
-    public static func floorToMinute(_ date: Date) -> Date {
-        // 用绝对时间戳算，不涉及时区：分钟对齐在任何时区下都是同一组时刻
-        // （UTC 偏移都是整分钟的，不存在 ±30 秒的时区）。
-        let seconds = date.timeIntervalSince1970
-        return Date(timeIntervalSince1970: (seconds / 60.0).rounded(.down) * 60.0)
-    }
 
     /// 把小时数**朝零截断**到整数小时。
     ///

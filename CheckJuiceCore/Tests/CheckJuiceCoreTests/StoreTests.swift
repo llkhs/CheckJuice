@@ -30,13 +30,13 @@ final class StoreTests: XCTestCase {
         try? FileManager.default.removeItem(at: dir)
     }
 
-    /// 测试数据的时刻必须**落在整分钟**上。
+    /// 读路径**是透明的**（不修改时刻精度），所以往返测试可以用任意时刻。
     ///
-    /// 读路径会把时刻对齐到分钟（见 `Device.normalizedToMinute`），
-    /// 所以拿带秒的数据做往返测试必然不等 —— 那不是 bug，是数据不合契约。
-    /// `1_700_000_000` 是 22:13:20，用它曾把 `testDeviceRoundTrip` 测红过一次。
+    /// 历史备注：这里曾经要求「测试数据必须落在整分钟上」，因为读路径有过一次
+    /// 「对齐到分钟」的迁移。那次迁移已移除（它把同一分钟内创建的设备压成同一
+    /// 时间戳，导致排序无从区分），契约随之恢复为「存什么读什么」。
     private func sampleDevice() -> Device {
-        let installed = LifetimeModel.floorToMinute(Date(timeIntervalSince1970: 1_700_000_000))
+        let installed = Date(timeIntervalSince1970: 1_700_000_000)
         return Device(
             id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
             name: "电子秤",
@@ -85,11 +85,15 @@ final class StoreTests: XCTestCase {
 
     /// 迁移契约：带秒的旧数据读出来必须是对齐到分钟的。
     ///
-    /// 这条测试表达的是**新版的行为** —— 读路径不是透明的，
-    /// 它会顺手把时刻收拾干净。写在这里是为了别让人以为 round-trip 丢了精度。
-    func testLoadNormalizesLegacySecondsToMinute() throws {
+    /// 读路径必须**原样返回**，不得偷偷改精度。
+    ///
+    /// 这条测试的方向变过一次：原来它断言「秒必须被抹掉」（配合一次已移除的迁移），
+    /// 现在反过来钉住「秒必须原封不动」。为什么反过来：
+    /// 截断会吧「按下按钮的真实时刻」往回挪最多 59 秒，而且让同一分钟内
+    /// 创建的多台设备得到相同时间戳，排序就分不出先后了。
+    func testLoadPreservesTimestampPrecision() throws {
         let url = dir.appendingPathComponent("legacy.json")
-        // 1_700_000_000 = 22:13:20，带 20 秒的「旧数据」。
+        // 1_700_000_000 = 22:13:20，带 20 秒。
         let messy = Date(timeIntervalSince1970: 1_700_000_000)
         let device = Device(
             name: "电子秤",
@@ -100,12 +104,8 @@ final class StoreTests: XCTestCase {
         try DeviceStore(fileURL: url).save([device])
 
         let loaded = try XCTUnwrap(DeviceStore(fileURL: url).load().first)
-        XCTAssertEqual(loaded.events[0].at,
-                       LifetimeModel.floorToMinute(messy),
-                       "旧数据的秒必须被抹掉")
-        XCTAssertEqual(loaded.events[0].at.timeIntervalSince1970
-                        .truncatingRemainder(dividingBy: 60), 0,
-                       "结果必须落在整分钟上")
+        XCTAssertEqual(loaded.events[0].at, messy,
+                       "读路径不得修改时刻精度 —— 存什么就得读回什么")
     }
 
     /// App → 小组件的契约。改了 `DeviceSnapshot` 的字段名却忘了改小组件，
