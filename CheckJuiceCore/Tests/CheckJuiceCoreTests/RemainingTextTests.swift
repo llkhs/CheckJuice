@@ -120,10 +120,11 @@ final class DurationTextTests: XCTestCase {
     }
 }
 
-/// 交替显示（「耗尽中」↔「还剩 X 分钟」）的触发条件。
+/// 交替显示（「即将耗尽」/「耗尽中」↔「还剩 X 分钟」）的触发条件与用词。
 ///
-/// 判据是 **P10 剩余**的绝对值 < 30 分钟 —— 跟列表上那个数字同源，
-/// 否则会出现「文字说还剩 40 分钟、却在交替显示」这种自相矛盾。
+/// 判据是 **P10 剩余**的绝对值 < 1 小时 —— 跟列表上那个数字同源。
+/// 阈值特意跟「还剩 N 分钟」的文案档位对齐，免得出现
+/// 「还剩 59 分钟不交替、还剩 61 分钟反而交替」这种莫名其妙的分界。
 final class AlternatingDisplayTests: XCTestCase {
 
     private func prediction(p10RemainingHours: Double) -> Prediction {
@@ -140,27 +141,56 @@ final class AlternatingDisplayTests: XCTestCase {
         )
     }
 
-    func testBelow30MinutesTriggers() {
-        XCTAssertTrue(prediction(p10RemainingHours: 0.49).needsAlternatingDisplay)
+    func testBelowOneHourTriggers() {
+        XCTAssertTrue(prediction(p10RemainingHours: 0.99).needsAlternatingDisplay)
+        XCTAssertTrue(prediction(p10RemainingHours: 0.5).needsAlternatingDisplay)
         XCTAssertTrue(prediction(p10RemainingHours: 0.1).needsAlternatingDisplay)
     }
 
-    func testAbove30MinutesDoesNotTrigger() {
-        XCTAssertFalse(prediction(p10RemainingHours: 0.51).needsAlternatingDisplay)
+    func testOneHourOrMoreDoesNotTrigger() {
+        XCTAssertFalse(prediction(p10RemainingHours: 1.0).needsAlternatingDisplay)
+        XCTAssertFalse(prediction(p10RemainingHours: 1.01).needsAlternatingDisplay)
         XCTAssertFalse(prediction(p10RemainingHours: 5).needsAlternatingDisplay)
     }
 
-    /// 已耗尽也要交替：那种情况本来就该说「耗尽中」。
     func testAlreadyExhaustedAlsoTriggers() {
         XCTAssertTrue(prediction(p10RemainingHours: -0.2).needsAlternatingDisplay)
-        XCTAssertTrue(prediction(p10RemainingHours: -0.49).needsAlternatingDisplay)
+        XCTAssertTrue(prediction(p10RemainingHours: -0.99).needsAlternatingDisplay)
         XCTAssertFalse(prediction(p10RemainingHours: -2).needsAlternatingDisplay)
     }
 
-    /// 边界：正好 30 分钟不触发（用 `<` 而不是 `<=`），
-    /// 否则「还剩 30 分钟」这种正常文案也会被压成「耗尽中」。
+    /// 边界：正好 1 小时不触发（用 `<` 而不是 `<=`）。
     func testBoundaryIsExclusive() {
-        XCTAssertFalse(prediction(p10RemainingHours: 0.5).needsAlternatingDisplay)
-        XCTAssertFalse(prediction(p10RemainingHours: -0.5).needsAlternatingDisplay)
+        XCTAssertFalse(prediction(p10RemainingHours: 1.0).needsAlternatingDisplay)
+        XCTAssertFalse(prediction(p10RemainingHours: -1.0).needsAlternatingDisplay)
+    }
+
+    // MARK: - 用词必须区分「快没了」和「已经没了」
+
+    func testPreExhaustUsesUpcomingWord() {
+        for hours in [0.99, 0.5, 0.1, 0.0] {
+            XCTAssertEqual(prediction(p10RemainingHours: hours).alternatingStatusWord,
+                           "即将耗尽",
+                           "还剩 \(hours) 小时是预警，不能说成「耗尽中」")
+        }
+    }
+
+    func testAlreadyExhaustedUsesExhaustedWord() {
+        for hours in [-0.01, -0.5, -0.99] {
+            XCTAssertEqual(prediction(p10RemainingHours: hours).alternatingStatusWord,
+                           "耗尽中",
+                           "已耗尽 \(hours) 小时是既成事实，不能说成「即将耗尽」")
+        }
+    }
+
+    /// 这一条挡的是「把快没了说成没了」—— 跟「还剩 0 小时」是同一类错误。
+    func testNeverClaimsExhaustedWhileStillAlive() {
+        // 用文案层真正会出现的值验一遍，而不只是阈值边界。
+        for hours in stride(from: 0.01, to: 1.0, by: 0.05) {
+            let p = prediction(p10RemainingHours: hours)
+            XCTAssertFalse(p.alternatingStatusWord.contains("耗尽中") &&
+                           !p.alternatingStatusWord.contains("即将"),
+                           "还剩 \(hours) 小时却说「耗尽中」")
+        }
     }
 }

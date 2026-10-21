@@ -259,11 +259,12 @@ public extension Prediction {
         return exhausted ? "刚刚耗尽" : "不足 1 分钟"
     }
 
-    /// 剩余时长小于这个值（30 分钟）时，列表改用「状态词 / 具体时长」交替显示。
+    /// 剩余时长小于这个值（1 小时）时，列表改用「状态词 / 具体时长」交替显示。
     ///
-    /// 为什么是 30 分钟：再往上（1 小时）文字本身已经够短，不需要压缩；
-    /// 再往下（10 分钟）留给用户反应的时间就不够了，光看交替反而更急。
-    public static let alternatingThresholdHours: Double = 0.5
+    /// 取 1 小时：这是「还剩 N 分钟」开始出现的档位。
+    /// **文案档位和交替档位对齐**，用户不会看到「还剩 59 分钟」不交替、
+    /// 「还剩 61 分钟」反而交替这种莫名其妙的分界。
+    public static let alternatingThresholdHours: Double = 1.0
 
     /// 这一条要不要在列表里交替显示。
     ///
@@ -276,9 +277,20 @@ public extension Prediction {
 
     /// 交替显示时的**短状态词**。
     ///
-    /// ⚠️ 已耗尽和「快耗尽」共用同一个词，这是产品上的妥协：
-    /// 还剩 12 分钟时显示「耗尽中」严格说是错的。要改成「即将耗尽」只需改这一行。
-    public static let alternatingStatusWord = "耗尽中"
+    /// **已耗尽和快耗尽必须用不同的词**：
+    /// - 还没到（剩余 ≥ 0）→「即将耗尽」，是预警；
+    /// - 已经过（剩余 < 0）→「耗尽中」，是既成事实。
+    ///
+    /// 混用会把「还有 12 分钟可用」说成「已经没电」，跟「还剩 0 小时」是同一类错误
+    /// （都是把「快没了」说成「没了」）。这两件事用户该做的动作完全不同：
+    /// 一个是准备更换，一个是已经该换了。
+    public static let preExhaustWord = "即将耗尽"
+    public static let exhaustedWord = "耗尽中"
+
+    /// 这一条在交替时该显示哪个短状态词。
+    public var alternatingStatusWord: String {
+        p10RemainingHours < 0 ? Self.exhaustedWord : Self.preExhaustWord
+    }
 
     /// 风险窗口起点（P10）的文本 —— 「最早可能耗尽」。
     ///

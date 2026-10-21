@@ -229,7 +229,7 @@ struct DeviceRow: View {
                 // 代价是两段文字要交替出现，看的人需要多扫一眼。
                 if style == .remaining, item.prediction.needsAlternatingDisplay {
                     AlternatingText(
-                        compact: Prediction.alternatingStatusWord,
+                        compact: item.prediction.alternatingStatusWord,
                         detail: item.prediction.remainingText(style: style)
                     )
                     .font(.title3)
